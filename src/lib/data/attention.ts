@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { FleetBoardVehicle } from "@/lib/data/fleet";
+import { daysUntil, formatDueText } from "@/lib/days-until";
 import { formatGpsFreshness } from "@/lib/gps/status";
 import { VEHICLE_DOCUMENT_TYPE_LABEL } from "@/lib/i18n/labels";
 import type { Database } from "@/lib/supabase/database.types";
@@ -29,18 +30,6 @@ export interface AttentionItem {
 
 const DOCUMENT_LOOKAHEAD_DAYS = 30;
 const MAINTENANCE_LOOKAHEAD_DAYS = 14;
-
-function daysUntil(dateStr: string, today: Date): number {
-  const target = new Date(`${dateStr}T00:00:00Z`);
-  const diffMs = target.getTime() - Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
-  return Math.round(diffMs / (24 * 60 * 60 * 1000));
-}
-
-function formatDueText(days: number, verb: string): string {
-  if (days < 0) return `${verb} overdue by ${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"}`;
-  if (days === 0) return `${verb} today`;
-  return `${verb} in ${days} day${days === 1 ? "" : "s"}`;
-}
 
 /**
  * Evidence FleetOS can surface without a human having entered anything --

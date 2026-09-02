@@ -34,3 +34,27 @@ export function computeVehicleOperationalStatus(
   }
   return "AVAILABLE";
 }
+
+/**
+ * A finer-grained status for the Vehicles list filter, built on top of
+ * `computeVehicleOperationalStatus` rather than duplicating its logic --
+ * the Command Center's 4-bucket summary is unaffected. IDLE splits out an
+ * AVAILABLE vehicle whose engine is running but not moving (from the
+ * latest GPS fix's movement_state); INACTIVE splits out vehicles retired
+ * from the fleet (sold/retired), which the 4-bucket model folds nowhere.
+ */
+export type VehicleListStatus = VehicleOperationalStatus | "IDLE" | "INACTIVE";
+
+export function deriveVehicleListStatus(
+  vehicleStatus: VehicleStatus,
+  operationalStatus: VehicleOperationalStatus,
+  movementState: Database["public"]["Enums"]["movement_state"] | null | undefined,
+): VehicleListStatus {
+  if (vehicleStatus === "sold" || vehicleStatus === "retired") {
+    return "INACTIVE";
+  }
+  if (operationalStatus === "AVAILABLE" && movementState === "idle") {
+    return "IDLE";
+  }
+  return operationalStatus;
+}

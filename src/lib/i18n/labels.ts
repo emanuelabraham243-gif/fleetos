@@ -1,5 +1,6 @@
 import type { TripStatus } from "@/lib/domain/trip";
-import type { VehicleOperationalStatus } from "@/lib/domain/vehicle";
+import type { DocumentStatus } from "@/lib/domain/document";
+import type { VehicleListStatus, VehicleOperationalStatus } from "@/lib/domain/vehicle";
 import type { Database } from "@/lib/supabase/database.types";
 
 /**
@@ -28,6 +29,12 @@ export const VEHICLE_OPERATIONAL_STATUS_LABEL: Record<VehicleOperationalStatus, 
   OFFLINE: "Offline",
 };
 
+export const VEHICLE_LIST_STATUS_LABEL: Record<VehicleListStatus, string> = {
+  ...VEHICLE_OPERATIONAL_STATUS_LABEL,
+  IDLE: "Idle",
+  INACTIVE: "Inactive",
+};
+
 type VehicleDocumentType = Database["public"]["Enums"]["document_type_vehicle"];
 
 export const VEHICLE_DOCUMENT_TYPE_LABEL: Record<VehicleDocumentType, string> = {
@@ -37,4 +44,56 @@ export const VEHICLE_DOCUMENT_TYPE_LABEL: Record<VehicleDocumentType, string> = 
   inspection_certificate: "Inspection certificate",
   title: "Title",
   other: "Document",
+};
+
+export const DOCUMENT_STATUS_LABEL: Record<DocumentStatus, string> = {
+  VALID: "Valid",
+  EXPIRING_SOON: "Expiring Soon",
+  EXPIRED: "Expired",
+  UNKNOWN: "Unknown",
+};
+
+type ExpenseCategory = Database["public"]["Enums"]["expense_category"];
+
+export const EXPENSE_CATEGORY_LABEL: Record<ExpenseCategory, string> = {
+  maintenance: "Maintenance",
+  insurance: "Insurance",
+  permit: "Permit",
+  toll: "Toll",
+  parking: "Parking",
+  fine: "Fine",
+  office: "Office",
+  parts: "Parts",
+  tires: "Tires",
+  driver_related: "Driver-related",
+  other: "Other",
+};
+
+type IncidentType = Database["public"]["Enums"]["incident_type"];
+
+export const INCIDENT_TYPE_LABEL: Record<IncidentType, string> = {
+  accident: "Accident",
+  traffic_violation: "Traffic violation",
+  mechanical: "Mechanical problem",
+  cargo_damage: "Cargo issue",
+  safety: "Safety",
+  other: "Operational incident",
+};
+
+type IncidentSeverity = Database["public"]["Enums"]["incident_severity"];
+
+export const INCIDENT_SEVERITY_LABEL: Record<IncidentSeverity, string> = {
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  critical: "Critical",
+};
+
+type IncidentStatus = Database["public"]["Enums"]["incident_status"];
+
+export const INCIDENT_STATUS_LABEL: Record<IncidentStatus, string> = {
+  open: "Open",
+  investigating: "Investigating",
+  resolved: "Resolved",
+  closed: "Closed",
 };

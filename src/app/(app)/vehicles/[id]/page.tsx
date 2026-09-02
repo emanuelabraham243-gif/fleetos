@@ -1,18 +1,36 @@
 import { notFound } from "next/navigation";
 
-import { GpsStatusWithFreshness } from "@/components/gps-status-badge";
+import { GpsStatusBadge } from "@/components/gps-status-badge";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DocumentsTab } from "@/components/vehicles/detail/documents-tab";
+import { ExpensesTab } from "@/components/vehicles/detail/expenses-tab";
+import { FuelTab } from "@/components/vehicles/detail/fuel-tab";
+import { HistoryTab } from "@/components/vehicles/detail/history-tab";
+import { IncidentsTab } from "@/components/vehicles/detail/incidents-tab";
+import { LiveTrackingSection } from "@/components/vehicles/detail/live-tracking-section";
+import { MaintenanceTab } from "@/components/vehicles/detail/maintenance-tab";
+import { OverviewSection } from "@/components/vehicles/detail/overview-section";
+import { TripsTab } from "@/components/vehicles/detail/trips-tab";
+import { VehicleActionsBar } from "@/components/vehicles/detail/vehicle-actions-bar";
+import { getDrivers } from "@/lib/data/drivers";
+import { getVehicleAssignmentHistory } from "@/lib/data/driver-assignments";
+import { getVehicleExpenses } from "@/lib/data/expenses";
+import { computeFuelMetrics, getVehicleFuelTransactions } from "@/lib/data/fuel";
+import { getRecentGpsEvents } from "@/lib/data/gps-events";
+import { getVehicleIncidents } from "@/lib/data/incidents";
+import { getVehicleMaintenance } from "@/lib/data/maintenance";
+import { getCurrentProfile } from "@/lib/data/profile";
+import { getRevenueByTripIds } from "@/lib/data/revenue";
+import { getVehicleDocuments } from "@/lib/data/vehicle-documents";
+import { getVehicleFinancialSummary } from "@/lib/data/vehicle-finance";
+import { getVehicleHistory } from "@/lib/data/vehicle-history";
 import { getVehicleById, getVehicleTrips } from "@/lib/data/vehicles";
-import { TRIP_STATUS_LABEL } from "@/lib/i18n/labels";
+import { isActiveTripStatus } from "@/lib/domain/trip";
+import { canManageFleet } from "@/lib/domain/permissions";
+import { computeVehicleOperationalStatus } from "@/lib/domain/vehicle";
+import { computeGpsStatus } from "@/lib/gps/status";
+import { VEHICLE_OPERATIONAL_STATUS_LABEL } from "@/lib/i18n/labels";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function VehicleDetailPage({
@@ -28,120 +46,126 @@ export default async function VehicleDetailPage({
     notFound();
   }
 
-  const trips = await getVehicleTrips(supabase, id);
-  const location = vehicle.vehicle_locations;
+  const [
+    profile,
+    trips,
+    assignmentHistory,
+    financials,
+    recentGpsEvents,
+    fuelTransactions,
+    expenses,
+    maintenance,
+    documents,
+    incidents,
+    history,
+    allDrivers,
+  ] = await Promise.all([
+    getCurrentProfile(),
+    getVehicleTrips(supabase, id, 50),
+    getVehicleAssignmentHistory(supabase, id),
+    getVehicleFinancialSummary(supabase, id),
+    getRecentGpsEvents(supabase, id, 10),
+    getVehicleFuelTransactions(supabase, id),
+    getVehicleExpenses(supabase, id),
+    getVehicleMaintenance(supabase, id),
+    getVehicleDocuments(supabase, id),
+    getVehicleIncidents(supabase, id),
+    getVehicleHistory(supabase, id),
+    getDrivers(supabase),
+  ]);
+
+  const revenueByTrip = await getRevenueByTripIds(supabase, trips.map((t) => t.id));
+
+  const activeTrip = trips.find((t) => isActiveTripStatus(t.status)) ?? null;
+  const currentAssignment = assignmentHistory.find((a) => !a.unassigned_at) ?? null;
+  const driverName = activeTrip?.driver?.full_name ?? currentAssignment?.driver?.full_name ?? null;
+
+  const gpsStatus = computeGpsStatus(vehicle.vehicle_locations?.recorded_at);
+  const operationalStatus = computeVehicleOperationalStatus(
+    vehicle.status,
+    activeTrip !== null,
+    gpsStatus,
+  );
+
+  const canManage = profile ? canManageFleet(profile.role) : false;
+  const fuelMetrics = computeFuelMetrics(fuelTransactions);
 
   return (
     <div className="flex flex-1 flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Unit {vehicle.unit_number}</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          {[vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ") || "Vehicle detail"}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-semibold tracking-tight">Unit {vehicle.unit_number}</h1>
+            <Badge variant="outline">{VEHICLE_OPERATIONAL_STATUS_LABEL[operationalStatus]}</Badge>
+            <GpsStatusBadge recordedAt={vehicle.vehicle_locations?.recorded_at} />
+          </div>
+          <p className="text-muted-foreground mt-1 text-sm">
+            {vehicle.license_plate ?? "No plate on file"}
+            {driverName ? ` · ${driverName}` : " · Unassigned"}
+          </p>
+        </div>
+        <VehicleActionsBar
+          vehicleId={vehicle.id}
+          canManage={canManage}
+          operationalStatus={operationalStatus}
+          drivers={allDrivers.map((d) => ({ id: d.id, full_name: d.full_name }))}
+          currentDriverId={currentAssignment?.driver_id ?? null}
+        />
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Vehicle</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-            <span className="text-muted-foreground">Status</span>
-            <span className="capitalize">{vehicle.status.replace("_", " ")}</span>
-            <span className="text-muted-foreground">Type</span>
-            <span className="capitalize">{vehicle.vehicle_type}</span>
-            <span className="text-muted-foreground">Plate</span>
-            <span>{vehicle.license_plate ?? "—"}</span>
-            <span className="text-muted-foreground">VIN</span>
-            <span className="truncate">{vehicle.vin ?? "—"}</span>
-            <span className="text-muted-foreground">Odometer</span>
-            <span>{Number(vehicle.odometer_km).toLocaleString()} km</span>
-            <span className="text-muted-foreground">Fuel type</span>
-            <span className="capitalize">{vehicle.fuel_type}</span>
-          </CardContent>
-        </Card>
+      <Tabs defaultValue="overview">
+        <TabsList className="flex-wrap">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="live-tracking">Live Tracking</TabsTrigger>
+          <TabsTrigger value="trips">Trips</TabsTrigger>
+          <TabsTrigger value="fuel">Fuel</TabsTrigger>
+          <TabsTrigger value="expenses">Expenses</TabsTrigger>
+          <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
+          <TabsTrigger value="documents">Documents</TabsTrigger>
+          <TabsTrigger value="incidents">Incidents</TabsTrigger>
+          <TabsTrigger value="history">History</TabsTrigger>
+        </TabsList>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">GPS</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3 text-sm">
-            <GpsStatusWithFreshness recordedAt={location?.recorded_at} />
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-              <span className="text-muted-foreground">Location</span>
-              <span>
-                {location ? `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}` : "Unknown"}
-              </span>
-              <span className="text-muted-foreground">Speed</span>
-              <span>{location?.speed_kph !== null && location?.speed_kph !== undefined ? `${location.speed_kph} km/h` : "—"}</span>
-              <span className="text-muted-foreground">Ignition</span>
-              <span>{location?.ignition_on === null || location?.ignition_on === undefined ? "—" : location.ignition_on ? "ON" : "OFF"}</span>
-              <span className="text-muted-foreground">Movement</span>
-              <span className="capitalize">{location?.movement_state ?? "—"}</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Notes</CardTitle>
-          </CardHeader>
-          <CardContent className="text-muted-foreground text-sm">
-            {vehicle.notes ?? "No notes on file."}
-          </CardContent>
-        </Card>
-      </div>
-
-      <div>
-        <h2 className="text-muted-foreground mb-2 text-sm font-semibold tracking-wide uppercase">
-          Trips
-        </h2>
-        {trips.length === 0 ? (
-          <Card className="border-dashed">
-            <CardContent className="text-muted-foreground py-10 text-center text-sm">
-              No trips recorded for this vehicle yet.
-            </CardContent>
-          </Card>
-        ) : (
-          <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Trip</TableHead>
-                  <TableHead>Driver</TableHead>
-                  <TableHead>Route</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Scheduled</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {trips.map((trip) => (
-                  <TableRow key={trip.id}>
-                    <TableCell className="font-medium">{trip.trip_number}</TableCell>
-                    <TableCell>{trip.driver?.full_name ?? "—"}</TableCell>
-                    <TableCell>
-                      {trip.origin ?? "?"} → {trip.destination ?? "?"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{TRIP_STATUS_LABEL[trip.status]}</Badge>
-                    </TableCell>
-                    <TableCell className="text-xs">
-                      {trip.scheduled_start
-                        ? new Date(trip.scheduled_start).toLocaleString(undefined, {
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                        : "—"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
-        )}
-      </div>
+        <TabsContent value="overview" className="mt-4">
+          <OverviewSection
+            vehicle={vehicle}
+            activeTrip={activeTrip}
+            driverName={driverName}
+            financials={financials}
+          />
+        </TabsContent>
+        <TabsContent value="live-tracking" className="mt-4">
+          <LiveTrackingSection
+            vehicle={vehicle}
+            recentEvents={recentGpsEvents}
+            driverName={driverName}
+            tripLabel={
+              activeTrip ? `${activeTrip.origin ?? "?"} → ${activeTrip.destination ?? "?"}` : null
+            }
+          />
+        </TabsContent>
+        <TabsContent value="trips" className="mt-4">
+          <TripsTab trips={trips} revenueByTrip={revenueByTrip} />
+        </TabsContent>
+        <TabsContent value="fuel" className="mt-4">
+          <FuelTab transactions={fuelTransactions} metrics={fuelMetrics} />
+        </TabsContent>
+        <TabsContent value="expenses" className="mt-4">
+          <ExpensesTab expenses={expenses} />
+        </TabsContent>
+        <TabsContent value="maintenance" className="mt-4">
+          <MaintenanceTab maintenance={maintenance} />
+        </TabsContent>
+        <TabsContent value="documents" className="mt-4">
+          <DocumentsTab documents={documents} />
+        </TabsContent>
+        <TabsContent value="incidents" className="mt-4">
+          <IncidentsTab incidents={incidents} />
+        </TabsContent>
+        <TabsContent value="history" className="mt-4">
+          <HistoryTab events={history} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

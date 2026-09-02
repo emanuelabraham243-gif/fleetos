@@ -28,6 +28,11 @@ function hashSeed(input: string): number {
   return Math.abs(hash);
 }
 
+// Addis Ababa, Ethiopia -- this fleet's home base. Purely a demo anchor
+// point for the mock feed; a real provider adapter would never hardcode
+// a metro area like this.
+const DEMO_METRO_AREA = { lat: 9.03, lng: 38.74 };
+
 function deviceBaseCoordinate(externalDeviceId: string): { lat: number; lng: number } {
   // Hash lat/lng independently -- device ids that differ by one trailing
   // character (MOCK-101 vs MOCK-102) would otherwise produce near-identical
@@ -35,8 +40,8 @@ function deviceBaseCoordinate(externalDeviceId: string): { lat: number; lng: num
   const latSeed = hashSeed(`${externalDeviceId}:lat`);
   const lngSeed = hashSeed(`${externalDeviceId}:lng`);
   // Spread demo vehicles around a single metro area rather than the globe.
-  const lat = 39.75 + ((latSeed % 1000) / 1000 - 0.5) * 0.3;
-  const lng = -104.99 + ((lngSeed % 1000) / 1000 - 0.5) * 0.3;
+  const lat = DEMO_METRO_AREA.lat + ((latSeed % 1000) / 1000 - 0.5) * 0.3;
+  const lng = DEMO_METRO_AREA.lng + ((lngSeed % 1000) / 1000 - 0.5) * 0.3;
   return { lat, lng };
 }
 
@@ -93,6 +98,7 @@ export const mockGpsProvider: GpsProvider = {
       movementState: movementStateFor(speedKph),
       rawPayload: {
         source: "mock-gps-provider",
+        demo: true,
         externalDeviceId,
         generatedAt: new Date(now).toISOString(),
       },

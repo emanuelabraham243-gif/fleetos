@@ -1964,6 +1964,7 @@ export type Database = {
       vehicle_documents: {
         Row: {
           created_at: string
+          document_number: string | null
           document_type: Database["public"]["Enums"]["document_type_vehicle"]
           expires_at: string | null
           file_url: string | null
@@ -1977,6 +1978,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          document_number?: string | null
           document_type: Database["public"]["Enums"]["document_type_vehicle"]
           expires_at?: string | null
           file_url?: string | null
@@ -1990,6 +1992,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          document_number?: string | null
           document_type?: Database["public"]["Enums"]["document_type_vehicle"]
           expires_at?: string | null
           file_url?: string | null
@@ -2011,6 +2014,68 @@ export type Database = {
           },
           {
             foreignKeyName: "vehicle_documents_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vehicle_driver_assignments: {
+        Row: {
+          assigned_at: string
+          assigned_by: string | null
+          created_at: string
+          driver_id: string
+          id: string
+          organization_id: string
+          unassigned_at: string | null
+          vehicle_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by?: string | null
+          created_at?: string
+          driver_id: string
+          id?: string
+          organization_id: string
+          unassigned_at?: string | null
+          vehicle_id: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string | null
+          created_at?: string
+          driver_id?: string
+          id?: string
+          organization_id?: string
+          unassigned_at?: string | null
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_driver_assignments_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_driver_assignments_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_driver_assignments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_driver_assignments_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicles"
@@ -2088,8 +2153,10 @@ export type Database = {
       vehicles: {
         Row: {
           archived_at: string | null
+          capacity_kg: number | null
           color: string | null
           created_at: string
+          engine_number: string | null
           fuel_type: Database["public"]["Enums"]["fuel_type"]
           id: string
           license_plate: string | null
@@ -2108,8 +2175,10 @@ export type Database = {
         }
         Insert: {
           archived_at?: string | null
+          capacity_kg?: number | null
           color?: string | null
           created_at?: string
+          engine_number?: string | null
           fuel_type?: Database["public"]["Enums"]["fuel_type"]
           id?: string
           license_plate?: string | null
@@ -2128,8 +2197,10 @@ export type Database = {
         }
         Update: {
           archived_at?: string | null
+          capacity_kg?: number | null
           color?: string | null
           created_at?: string
+          engine_number?: string | null
           fuel_type?: Database["public"]["Enums"]["fuel_type"]
           id?: string
           license_plate?: string | null
@@ -2381,6 +2452,9 @@ export type Database = {
         | "fine"
         | "office"
         | "other"
+        | "parts"
+        | "tires"
+        | "driver_related"
       fuel_type: "diesel" | "gasoline" | "electric" | "cng" | "other"
       gps_connection_status: "active" | "paused" | "error" | "disconnected"
       gps_integration_type:
@@ -2664,6 +2738,9 @@ export const Constants = {
         "fine",
         "office",
         "other",
+        "parts",
+        "tires",
+        "driver_related",
       ],
       fuel_type: ["diesel", "gasoline", "electric", "cng", "other"],
       gps_connection_status: ["active", "paused", "error", "disconnected"],

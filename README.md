@@ -8,9 +8,16 @@ trucking business running 4 vehicles.
 - **Phase 2** (Command Center): the first real operational screen -- live
   fleet summary, map, vehicle list, active trips, evidence-based attention
   items, and a recent-activity timeline, all computed from the database.
+- **Phase 3** (Vehicle Management): a full Vehicles list (search, composable
+  filters, clickable summary cards) and a Vehicle Detail "dossier" -- 9 tabs
+  covering overview, live tracking, trips, fuel, expenses, maintenance,
+  documents, incidents, and full history -- plus Add/Edit Vehicle and
+  driver-assignment workflows. Demo data is now anchored on an Ethiopian
+  transport operation (Addis Ababa, Adama, Bishoftu, Hawassa, Mojo, Dire
+  Dawa) instead of the placeholder US data Phases 1-2 shipped with.
 
-Every other module (Trips, Finance, Compliance, Intelligence, Issues,
-System) still renders an honest placeholder -- see
+Every other module (Finance beyond fuel/expenses, Compliance, Intelligence,
+Issues beyond incidents, System) still renders an honest placeholder -- see
 [What's deliberately not here](#whats-deliberately-not-here).
 
 ## Stack
@@ -185,16 +192,87 @@ maps tokens to English text -- adding Amharic later means adding
 `src/lib/i18n/am.ts` with the same keys and a locale resolver, not
 touching any conditional in the app.
 
+### Vehicle Management (Phase 3)
+
+`src/app/(app)/vehicles/page.tsx` reuses the exact same `buildFleetBoard`/
+`summarizeFleet` functions the Command Center uses (plus
+`getCurrentAssignmentsByVehicle` and `getUpcomingMaintenanceByVehicle`) --
+the fleet-wide summary cards, search, and composable filters
+(`src/components/vehicles/vehicles-explorer.tsx`) are all client-side over
+that one server fetch, table on desktop / cards on mobile via CSS
+breakpoints, not a JS toggle.
+
+`src/app/(app)/vehicles/[id]/page.tsx` is the vehicle "dossier": one
+parallel data fetch (12 queries via `Promise.all`) feeding 9 tabs
+(`src/components/vehicles/detail/*.tsx`) -- Overview, Live Tracking, Trips,
+Fuel, Expenses, Maintenance, Documents, Incidents, History. Notable pieces:
+
+- **Financial summary** (`src/lib/data/vehicle-finance.ts`) -- revenue is
+  resolved through this vehicle's own trips (the schema scopes `revenues`
+  to a trip, not a vehicle directly); every line is `null` (rendered "No
+  data yet") rather than `0` when nothing's been recorded, so an unknown
+  number is never confused with a known zero.
+- **Fuel metrics** (`src/lib/data/fuel.ts`) -- cost/km only computes when
+  at least two active transactions have distinct odometer readings;
+  otherwise the tab shows "Insufficient data" rather than a guess.
+- **Driver assignment** is a new table, `vehicle_driver_assignments`
+  (`supabase/migrations/20260904080000_vehicle_driver_assignments.sql`) --
+  append-only history distinct from "who's driving the current trip". A
+  partial unique index (`where unassigned_at is null`) guarantees at most
+  one *open* assignment per vehicle without a redundant "is_current" flag;
+  reassigning closes the old row (`unassigned_at = now()`) rather than
+  deleting it, and the existing Phase 1 audit trigger is attached the same
+  way it is everywhere else.
+- **History tab** (`src/lib/data/vehicle-history.ts`) merges three
+  existing sources rather than introducing a new event-log table:
+  `audit_logs` filtered to this vehicle (field-level edits, from the
+  Phase 1 trigger), `recent_activity_feed` filtered by `vehicle_id`
+  (trip/fuel/GPS/maintenance events, from Phase 2), and
+  `vehicle_driver_assignments` (open/close events).
+- **Permissions** (`src/lib/domain/permissions.ts`) -- reuses the
+  existing `org_role` enum rather than a new system: `owner`/`admin`/
+  `dispatcher` can add/edit vehicles and assign drivers, everyone else is
+  view-only. Enforced in the UI (buttons hidden) and in every mutating
+  Server Action (checked again server-side); **not yet in RLS itself** --
+  see [Known limitations](#known-limitations-phase-3).
+- Two small additive migrations round out fields the spec needed that
+  Phase 1 had no use for yet: `vehicles.capacity_kg` /
+  `vehicles.engine_number`, `vehicle_documents.document_number`, an
+  organization-scoped unique constraint on `vehicles.license_plate`, and
+  three more `expense_category` enum values (`parts`, `tires`,
+  `driver_related` -- fuel already has its own table, so it's deliberately
+  not one of them).
+
+### Ethiopian demo data (Phase 3)
+
+Phase 1/2 shipped with placeholder US data (Colorado plates, Denver-area
+mock GPS, American driver names) that didn't match the business FleetOS is
+actually being built for. That's now corrected -- **as a data change, not
+an architecture change**: the same `mockGpsProvider` (`src/lib/gps/
+providers/mock.ts`) now anchors its simulated routes on Addis Ababa instead
+of Denver (one constant, `DEMO_METRO_AREA`), and every `raw_payload` it
+produces is tagged `demo: true`. Seed data now reflects an Addis
+Ababa-based fleet running the Addis Ababa-Adama-Bishoftu-Hawassa-Mojo-Dire
+Dawa corridor, Ethiopian-style plates (`3-12345`), trucks actually common
+in Ethiopian freight (Isuzu, Sinotruk, FAW), fictional Ethiopian driver
+names, and Ethiopian Birr (`ETB`) as the transaction currency throughout.
+None of this touches the schema, RLS, or the GPS abstraction -- see
+`supabase/seed_phase3_ethiopia.sql`.
+
 ## What's deliberately not here
 
-No CRUD for Trips/Finance/Maintenance/Compliance/Intelligence/Issues/System
-modules (their nav routes, plus the 5 quick-action routes --
-`/vehicles/new`, `/trips/new`, `/finance/fuel/new`, `/finance/expenses/new`,
-`/issues/incidents/new` -- render placeholders), no non-mock GPS adapters,
-no Amharic/i18n UI (deliberately deferred, but the token layer is ready
-for it), no government/regulatory integrations. The schema, RLS, and
-navigation route for every deferred module already exist -- only the
-working screen is deferred.
+No CRUD for Finance beyond Fuel/Expenses, Compliance, Intelligence, or
+Issues beyond Incidents, and no Trips module beyond what a vehicle's Trips
+tab already shows (their nav routes, plus the quick-action routes --
+`/trips/new`, `/finance/fuel/new`, `/finance/expenses/new`,
+`/issues/incidents/new`, `/maintenance/new` -- render placeholders), no
+non-mock GPS adapters, no Amharic/i18n UI (deliberately deferred, but the
+token layer is ready for it -- see
+[Language-neutral by design](#language-neutral-by-design)), no government/
+regulatory integrations. The schema, RLS, and navigation route for every
+deferred module already exist -- only the working screen is deferred.
+Trip rows aren't clickable yet (no `/trips/[id]` route exists) -- linking
+to one would be exactly the "fake functionality" this project avoids.
 
 ## Seeding
 
@@ -206,9 +284,14 @@ driver, one active trip matching the spec's own worked example --
 `TR-001`, unit 101, driver Abebe Kebede, Addis Ababa -> Hawassa,
 `IN_TRANSIT` -- a near-expiry vehicle document and a near-due maintenance
 schedule so "Attention Required" has real evidence, and fresh GPS events).
-Both were applied directly against the Supabase project for this
-environment; on a fresh project, run the migrations in
-`supabase/migrations/` in order, then both seed files.
+`supabase/seed_phase3_ethiopia.sql` then re-anchors that same data on
+Ethiopia (renames drivers, restyles vehicles/plates, relocates GPS, adds
+`TR-002`-`TR-005` across other Ethiopian corridors, fuel/expense/incident/
+document records, and the 4 persistent driver assignments). All three
+were applied directly against the Supabase project for this environment;
+on a fresh project, run the migrations in `supabase/migrations/` in order,
+then all three seed files in order (`seed.sql`, `seed_phase2.sql`,
+`seed_phase3_ethiopia.sql`).
 
 ## Known limitations (Phase 2)
 
@@ -227,6 +310,25 @@ environment; on a fresh project, run the migrations in
   platform level (flagged by the security advisor) -- a dashboard toggle
   (Authentication -> Policies), not something a migration can set; worth
   enabling before any real users sign up.
+
+## Known limitations (Phase 3)
+
+- **Role restrictions are app-layer only, not yet RLS.** `canManageFleet`
+  gates the UI and every Server Action, but the underlying `vehicles`/
+  `drivers` RLS policies (from Phase 1) still let any org member write --
+  they were left as-is rather than risk rewriting tested Phase 1 policies
+  under this phase's "don't break what works" constraint. Tightening RLS
+  itself to match is a natural next step, not a redesign.
+- **Trip/fuel/expense/incident "quick actions" are still placeholders.**
+  Only Add/Edit Vehicle and Assign Driver got real forms this phase; Start
+  Trip, Record Fuel, Report Issue, and Schedule Maintenance link to the
+  existing (or newly added, for maintenance) placeholder routes with a
+  `?vehicleId=` query param that isn't consumed by anything yet.
+- **Trip rows aren't clickable.** No `/trips/[id]` page exists yet.
+- **Vehicles list filters are client-side, not URL-persisted** -- they
+  reset on refresh; not shareable/bookmarkable yet.
+- **GPS still goes stale without a sync** -- same as Phase 2's limitation,
+  unchanged by this phase.
 
 ## Verification performed
 
@@ -272,3 +374,38 @@ environment; on a fresh project, run the migrations in
   equivalent SQL directly against the live database (see above). Signing
   in with the demo credentials from a normal network is the one
   remaining check.
+
+**Phase 3 (additional):**
+- `npm run build` -- clean, 37 routes including `/vehicles/[id]/edit`.
+- `npx tsc --noEmit` and `npx eslint . --max-warnings=0` -- both clean.
+- All 4 Phase 3 migrations (driver assignments table, vehicle
+  capacity/engine number/plate constraint, expense category values,
+  document number) applied to and verified against the live database, not
+  just locally: confirmed the org-scoped unique plate constraint actually
+  rejects a duplicate (wrapped in a `do $$ ... exception when
+  unique_violation$$` probe), confirmed the partial unique index left
+  exactly one open assignment per vehicle across all 4 vehicles, confirmed
+  the Phase 1 audit trigger fired for real during the Ethiopia-data
+  updates (9 real `audit_logs` rows: 4 vehicles + 5 drivers) -- meaning
+  the History tab's audit source has genuine data, not just a code path.
+- Verified live: the fleet-summary/list-status SQL equivalent currently
+  produces one vehicle in each of ON_TRIP/AVAILABLE/MAINTENANCE/OFFLINE;
+  vehicle 103's expense (30,500 ETB across 2 rows) and fuel
+  (12,800 ETB) sums match what the Fuel/Expenses tabs and Financial
+  Summary should show, while its `work_orders`-based maintenance cost and
+  trip-linked revenue correctly resolve to no rows (verifying the "show
+  nothing invented" path, not just the "show a number" path).
+- Re-ran the security advisor after all Phase 3 migrations: no new
+  findings beyond the pre-existing intentional ones.
+- Re-ran the same route smoke test as Phase 2 (`next start`, direct HTTP)
+  across old and new routes (`/`, `/login`, `/vehicles`, `/vehicles/new`,
+  `/vehicles/[id]`, `/vehicles/[id]/edit`, `/maintenance/new`, `/drivers`)
+  -- every protected route still correctly redirects unauthenticated
+  visitors, `/login` still 200s: no regression to Phase 1/2 auth or
+  routing.
+- **Not verified** (same constraint as Phase 2): an authenticated browser
+  session exercising search/filters, the Assign Driver dialog, or the
+  Add/Edit Vehicle forms end-to-end. All of it was instead verified at the
+  data layer (the queries and mutations were run directly against the live
+  database as shown above); a real click-through pass from a normal
+  network is the one remaining check for this phase too.
