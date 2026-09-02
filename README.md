@@ -1,16 +1,24 @@
 # FleetOS
 
 Fleet management and transport operations platform, built for a small
-trucking business running 4 vehicles. This is the **Phase 1 technical
-foundation**: database schema, multi-tenancy, RLS, auth, the GPS provider
-abstraction, and the application shell. No module's UI is fully built out
-yet -- see [What's deliberately not here](#whats-deliberately-not-here).
+trucking business running 4 vehicles.
+
+- **Phase 1** (technical foundation): database schema, multi-tenancy, RLS,
+  auth, the GPS provider abstraction, the application shell.
+- **Phase 2** (Command Center): the first real operational screen -- live
+  fleet summary, map, vehicle list, active trips, evidence-based attention
+  items, and a recent-activity timeline, all computed from the database.
+
+Every other module (Trips, Finance, Compliance, Intelligence, Issues,
+System) still renders an honest placeholder -- see
+[What's deliberately not here](#whats-deliberately-not-here).
 
 ## Stack
 
 - Next.js 16 (App Router, Turbopack) + React 19 + TypeScript (strict)
 - Tailwind CSS v4 + hand-scaffolded shadcn/ui primitives (`src/components/ui`)
 - Supabase: Postgres, Auth, Storage, Row Level Security
+- Leaflet + OpenStreetMap tiles for the live fleet map (no API key required)
 
 ## Getting started
 
@@ -124,60 +132,143 @@ unauthenticated visitors on every request (Next.js 16 renamed
 ### Application shell
 
 `src/app/(app)/layout.tsx` loads the current profile + organization and
-renders `AppShell` (`src/components/app-shell.tsx`): a sidebar on desktop,
-a `Sheet`-based drawer on mobile, and the full navigation tree from
-`src/lib/nav.ts` (Command Center, Operations, Fleet, Finance, Compliance,
-Intelligence, Issues, System). Every route in that tree exists and
-resolves; most render `PagePlaceholder` (`src/components/page-placeholder.tsx`)
--- an honest "not built yet" state rather than fabricated rows. Vehicles
-and Drivers are real, data-backed list pages (including the GPS status
-badge) since the schema, seed data, and GPS status calculation all exist
-to back them.
+renders `AppShell` (`src/components/app-shell.tsx`): a desktop sidebar
+that collapses to icon-only (persisted to `localStorage`, not the
+database -- it's a per-device UI preference, not fleet data), a
+`Sheet`-based drawer on mobile, a header with the current page title
+(derived from the route, not stored), a notifications bell reading real
+unread counts, and a quick-actions menu. Nav tree lives in `src/lib/nav.ts`
+(Command Center, Operations, Fleet, Finance, Compliance, Intelligence,
+Issues, System). Every route in that tree exists and resolves; most
+render `PagePlaceholder` (`src/components/page-placeholder.tsx`) -- an
+honest "not built yet" state rather than fabricated rows.
+
+### Command Center (Phase 2)
+
+`src/app/(app)/page.tsx` composes one data fetch (`src/lib/data/fleet.ts`,
+`trips.ts`, `attention.ts`, `activity.ts`) into every section on the page
+-- nothing re-queries what another section already fetched:
+
+- **Fleet summary** -- Total / On Trip / Available / Maintenance / Offline
+  / Active Trips, computed by `computeVehicleOperationalStatus`
+  (`src/lib/domain/vehicle.ts`) from the vehicle's own status, whether it
+  has an active trip, and its GPS status. Never stored, never hardcoded.
+- **Live fleet map** (`src/components/fleet-map.tsx`) -- Leaflet +
+  OpenStreetMap, plotting real `vehicle_locations`, colored by GPS status,
+  click-to-summary popup. A vehicle with no fix simply isn't plotted (the
+  vehicle list still shows it as "Unknown" -- the map never invents a
+  position).
+- **Vehicle operations list** and **active trips** both read from the
+  same `getFleetBoard`/`getActiveTrips` functions the summary and map use
+  -- one source of truth, never duplicated per screen.
+- **Attention required** (`src/lib/data/attention.ts`) -- evidence, not
+  accusations: a GPS gap ("Last signal 93 minutes ago"), a document's own
+  expiry date, a maintenance schedule's own due date. Nothing here is
+  free-text; every item traces back to a queryable fact.
+- **Recent activity** reads `recent_activity_feed`, a `security_invoker`
+  Postgres view unioning trip/fuel/GPS/maintenance events (see
+  `supabase/migrations/20260903090100_recent_activity_view.sql`) --
+  English descriptions are built in `src/lib/i18n/describe-activity.ts`
+  from language-neutral event tokens, never stored pre-formatted.
+- **Sync GPS** button (next to the map) runs one pull cycle of the mock
+  provider on demand, since there's no scheduler yet to do it
+  automatically -- see [Known limitations](#known-limitations-phase-2).
+
+### Language-neutral by design
+
+Every new enum and computed status introduced in Phase 2 uses
+`UPPER_SNAKE_CASE` tokens (`trip_status`: `DRAFT`...`CANCELLED`; the
+computed `VehicleOperationalStatus`: `ON_TRIP`/`AVAILABLE`/`MAINTENANCE`/
+`OFFLINE`) and business logic compares against those tokens, never
+against display strings. `src/lib/i18n/labels.ts` is the one place that
+maps tokens to English text -- adding Amharic later means adding
+`src/lib/i18n/am.ts` with the same keys and a locale resolver, not
+touching any conditional in the app.
 
 ## What's deliberately not here
 
-Per the Phase 1 brief: no full Command Center (map, dispatch board), no
-CRUD for Trips/Finance/Maintenance/Compliance/Intelligence/Issues/System
-modules, no non-mock GPS adapters, no government/regulatory integrations.
-The schema, RLS, and navigation route for every one of those already
-exist -- only the working screen is deferred.
+No CRUD for Trips/Finance/Maintenance/Compliance/Intelligence/Issues/System
+modules (their nav routes, plus the 5 quick-action routes --
+`/vehicles/new`, `/trips/new`, `/finance/fuel/new`, `/finance/expenses/new`,
+`/issues/incidents/new` -- render placeholders), no non-mock GPS adapters,
+no Amharic/i18n UI (deliberately deferred, but the token layer is ready
+for it), no government/regulatory integrations. The schema, RLS, and
+navigation route for every deferred module already exist -- only the
+working screen is deferred.
 
 ## Seeding
 
-Demo data (one organization, 2 users, 4 vehicles, 4 drivers, 1 mock GPS
-connection, 3 GPS devices/events covering live/delayed/offline, and the
-4th vehicle intentionally left without a device to demonstrate "unknown")
-lives in `supabase/seed.sql`. It was applied directly against the Supabase
-project for this environment; if you're setting up a fresh project, run
-the migrations in `supabase/migrations/` in order, then run
-`supabase/seed.sql` against that project (e.g. via the Supabase SQL editor,
-or `psql` against the project's connection string).
+Demo data lives in `supabase/seed.sql` (Phase 1: one organization, 2 login
+users, 4 vehicles, 4 drivers, 1 mock GPS connection, GPS events covering
+live/delayed/offline, the 4th vehicle intentionally left without a device
+to demonstrate "unknown") plus `supabase/seed_phase2.sql` (adds a 5th
+driver, one active trip matching the spec's own worked example --
+`TR-001`, unit 101, driver Abebe Kebede, Addis Ababa -> Hawassa,
+`IN_TRANSIT` -- a near-expiry vehicle document and a near-due maintenance
+schedule so "Attention Required" has real evidence, and fresh GPS events).
+Both were applied directly against the Supabase project for this
+environment; on a fresh project, run the migrations in
+`supabase/migrations/` in order, then both seed files.
+
+## Known limitations (Phase 2)
+
+- **GPS data goes stale without a scheduler.** The mock feed only
+  advances when something calls `syncGpsConnection` (Phase 1's
+  `POST /api/gps/sync`, or the "Sync GPS" button on the Command Center).
+  There's no cron/queue running it automatically yet -- a vehicle seeded
+  as LIVE will correctly (and honestly) become DELAYED then OFFLINE as
+  real time passes until someone syncs again.
+- **Driver assignment is trip-only.** A vehicle's "driver" is whoever is
+  on its current active trip; there's no fixed vehicle-driver assignment
+  concept, which matches how the schema was designed in Phase 1 but means
+  a vehicle with no active trip always shows "Unassigned", never a
+  default driver.
+- **`auth_leaked_password_protection` is disabled** at the Supabase Auth
+  platform level (flagged by the security advisor) -- a dashboard toggle
+  (Authentication -> Policies), not something a migration can set; worth
+  enabling before any real users sign up.
 
 ## Verification performed
 
-- `npm run build` -- clean production build, all 27 routes compile.
-- `npx tsc --noEmit` (via the build's typecheck step) -- no errors.
-- `npx eslint .` -- no errors or warnings.
-- All 14 migrations applied to the live Supabase project; `list_tables`
-  confirms all 34 tables with RLS enabled; the security/performance
-  advisors were run and every actionable finding (unindexed foreign keys,
-  RLS policies re-evaluating `auth.uid()` per row, overly-public
-  `security definer` functions) was fixed.
-- Seed data counts confirmed directly against the database (1 org, 2 auth
-  users, 2 profiles created via the `handle_new_user` trigger, 4 vehicles,
-  4 drivers, 3 GPS devices/events, 3 cached locations).
-- The GPS mock provider and `computeGpsStatus` were exercised directly
-  (pure functions, no I/O) against the spec's own examples (2 min -> live,
-  15 min -> delayed, 60 min -> offline, no data -> unknown) -- all pass.
-- The app was started (`next start`) and hit directly over HTTP: `/login`
-  renders (200, real shadcn-styled markup, compiled Tailwind design
-  tokens present in the CSS), every protected route correctly 307-redirects
-  to `/login?next=<path>` when unauthenticated.
-- **Not verified**: an actual browser sign-in against the live Supabase
-  Auth API from inside this environment -- this sandbox's egress policy
-  blocks outbound HTTPS to `supabase.co` (confirmed via the proxy status
-  endpoint, same restriction that blocked the shadcn CLI). The database
-  side of auth (the `auth.users` rows, the `handle_new_user` trigger
-  firing and creating matching `profiles` rows) was verified directly
-  against the database instead. Sign in with the demo credentials above
-  from a normal network to confirm the client-side flow.
+**Phase 1:**
+- `npm run build`, `npx tsc --noEmit`, `npx eslint .` -- all clean.
+- All migrations applied to the live Supabase project; `list_tables`
+  confirmed RLS enabled everywhere; every actionable security/performance
+  advisor finding (unindexed foreign keys, RLS re-evaluating `auth.uid()`
+  per row, overly-public `security definer` functions) was fixed.
+- Seed data counts confirmed directly against the database; the
+  `handle_new_user` trigger confirmed firing (2 auth users -> 2 profiles).
+- `computeGpsStatus` exercised directly against the spec's own examples
+  (2 min -> live, 15 min -> delayed, 60 min -> offline, no data ->
+  unknown) -- all pass.
+
+**Phase 2 (additional):**
+- `npm run build` -- clean, 35 pages / 33 app routes, including the new
+  `/vehicles/[id]` dynamic route and the 5 quick-action placeholders.
+- `npx tsc --noEmit` and `npx eslint . --max-warnings=0` -- both clean.
+- The `trip_status` enum swap, the `recent_activity_feed` view, and the
+  Phase 2 seed data were all applied to and verified directly against the
+  live database (not just locally) -- confirmed via direct SQL that:
+  the fleet-summary logic's SQL equivalent produces one vehicle in each
+  of ON_TRIP / AVAILABLE / MAINTENANCE / OFFLINE; the active-trips join
+  returns exactly the worked example from the spec (`TR-001`, unit 101,
+  Abebe Kebede, Addis Ababa -> Hawassa, IN_TRANSIT); the attention-item
+  queries return the seeded near-expiry document and near-due maintenance
+  schedule with correct day counts; `recent_activity_feed` returns rows
+  for both the GPS and trip event types.
+- Re-ran the security advisor after the Phase 2 migrations: no new
+  findings beyond the pre-existing intentional ones (see
+  [Known limitations](#known-limitations-phase-2) for the one platform
+  setting it flagged).
+- The app was started (`next start`) and hit directly over HTTP: every
+  route -- old and new -- still correctly 307-redirects to
+  `/login?next=<path>` when unauthenticated, confirming the Phase 1 auth
+  guard and no route regressions; `/login` still renders 200.
+- **Not verified**: an actual authenticated browser session against the
+  Command Center -- this sandbox's egress policy blocks outbound HTTPS to
+  `supabase.co` (confirmed via the proxy status endpoint), so the Auth API
+  call a real sign-in makes cannot be exercised from here. Everything the
+  Command Center's queries return was instead verified by running the
+  equivalent SQL directly against the live database (see above). Signing
+  in with the demo credentials from a normal network is the one
+  remaining check.

@@ -29,3 +29,45 @@ export async function getVehicles(
 
   return data;
 }
+
+/** Single-vehicle read for the vehicle detail page. Returns null if not found (or not in the caller's org, via RLS). */
+export async function getVehicleById(
+  supabase: SupabaseClient<Database>,
+  vehicleId: string,
+): Promise<VehicleWithLocation | null> {
+  const { data, error } = await supabase
+    .from("vehicles")
+    .select("*, vehicle_locations(*)")
+    .eq("id", vehicleId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to load vehicle: ${error.message}`);
+  }
+
+  return data;
+}
+
+export type VehicleTrip = Database["public"]["Tables"]["trips"]["Row"] & {
+  driver: Pick<Database["public"]["Tables"]["drivers"]["Row"], "id" | "full_name"> | null;
+};
+
+/** Most recent trips for one vehicle (active or not), newest first. */
+export async function getVehicleTrips(
+  supabase: SupabaseClient<Database>,
+  vehicleId: string,
+  limit = 10,
+): Promise<VehicleTrip[]> {
+  const { data, error } = await supabase
+    .from("trips")
+    .select("*, driver:drivers(id, full_name)")
+    .eq("vehicle_id", vehicleId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw new Error(`Failed to load vehicle trips: ${error.message}`);
+  }
+
+  return data;
+}

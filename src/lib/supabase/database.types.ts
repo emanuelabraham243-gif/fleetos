@@ -2291,7 +2291,18 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      recent_activity_feed: {
+        Row: {
+          details: Json | null
+          driver_id: string | null
+          event_type: string | null
+          occurred_at: string | null
+          organization_id: string | null
+          record_id: string | null
+          vehicle_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       current_org_id: { Args: never; Returns: string }
@@ -2426,11 +2437,15 @@ export type Database = {
         | "superseded"
         | "archived"
       trip_status:
-        | "planned"
-        | "dispatched"
-        | "in_progress"
-        | "completed"
-        | "cancelled"
+        | "DRAFT"
+        | "ASSIGNED"
+        | "LOADING"
+        | "DISPATCHED"
+        | "IN_TRANSIT"
+        | "ARRIVED"
+        | "DELIVERED"
+        | "COMPLETED"
+        | "CANCELLED"
       trip_stop_type: "pickup" | "dropoff" | "fuel" | "rest" | "other"
       vehicle_status:
         | "active"
@@ -2694,11 +2709,15 @@ export const Constants = {
       payment_method: ["cash", "card", "bank_transfer", "check", "other"],
       record_state: ["active", "voided", "corrected", "superseded", "archived"],
       trip_status: [
-        "planned",
-        "dispatched",
-        "in_progress",
-        "completed",
-        "cancelled",
+        "DRAFT",
+        "ASSIGNED",
+        "LOADING",
+        "DISPATCHED",
+        "IN_TRANSIT",
+        "ARRIVED",
+        "DELIVERED",
+        "COMPLETED",
+        "CANCELLED",
       ],
       trip_stop_type: ["pickup", "dropoff", "fuel", "rest", "other"],
       vehicle_status: [

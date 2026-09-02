@@ -1,7 +1,6 @@
-export type GpsStatus = "live" | "delayed" | "offline" | "unknown";
+import { GPS_STATUS_THRESHOLDS } from "./config";
 
-const LIVE_THRESHOLD_MS = 5 * 60 * 1000; // <= 5 minutes old
-const DELAYED_THRESHOLD_MS = 20 * 60 * 1000; // <= 20 minutes old
+export type GpsStatus = "live" | "delayed" | "offline" | "unknown";
 
 /**
  * Turns "when was this vehicle last heard from" into a status a dispatcher
@@ -31,10 +30,10 @@ export function computeGpsStatus(
     // Clock skew from the device -- treat as live rather than invent a status.
     return "live";
   }
-  if (ageMs <= LIVE_THRESHOLD_MS) {
+  if (ageMs <= GPS_STATUS_THRESHOLDS.liveMaxAgeMs) {
     return "live";
   }
-  if (ageMs <= DELAYED_THRESHOLD_MS) {
+  if (ageMs <= GPS_STATUS_THRESHOLDS.delayedMaxAgeMs) {
     return "delayed";
   }
   return "offline";
@@ -46,3 +45,34 @@ export const GPS_STATUS_LABEL: Record<GpsStatus, string> = {
   offline: "Offline",
   unknown: "Unknown",
 };
+
+function formatRelativeAge(ageMs: number): string {
+  const minutes = Math.round(ageMs / 60_000);
+  if (minutes < 1) return "less than a minute ago";
+  if (minutes === 1) return "1 minute ago";
+  if (minutes < 60) return `${minutes} minutes ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours === 1) return "1 hour ago";
+  return `${hours} hours ago`;
+}
+
+/**
+ * The one place that turns a raw timestamp into the sentence a dispatcher
+ * reads ("Updated 2 min ago" vs "Last signal 47 min ago") -- so a stale fix
+ * is never presented with the same confidence as a fresh one, and every
+ * screen that shows GPS freshness says it the same way.
+ */
+export function formatGpsFreshness(
+  recordedAt: string | null | undefined,
+  now: Date = new Date(),
+): { status: GpsStatus; label: string } {
+  const status = computeGpsStatus(recordedAt, now);
+
+  if (status === "unknown" || !recordedAt) {
+    return { status, label: "No GPS data received yet" };
+  }
+
+  const ageMs = Math.max(0, now.getTime() - new Date(recordedAt).getTime());
+  const prefix = status === "offline" ? "Last signal" : "Updated";
+  return { status, label: `${prefix} ${formatRelativeAge(ageMs)}` };
+}
