@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: fleetos
+    runtime: node
+    plan: free
+    branch: claude/fleetos-technical-foundation-lsom04
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: NEXT_PUBLIC_SITE_URL
+        sync: false

@@ -20,6 +20,21 @@ cp .env.example .env.local   # fill in your Supabase project URL + anon key
 npm run dev
 ```
 
+## Deploying to Render
+
+A `render.yaml` blueprint is included. Either "New > Blueprint" from this
+repo, or create a Web Service manually with:
+
+- **Runtime**: Node (`.node-version` pins Node 22)
+- **Build command**: `npm ci && npm run build`
+- **Start command**: `npm run start` (reads Render's `PORT` automatically)
+- **Branch**: `claude/fleetos-technical-foundation-lsom04`
+- **Environment variables** (Render dashboard -> Environment): copy the
+  values from your local `.env.local` --
+  `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and
+  `NEXT_PUBLIC_SITE_URL` set to the Render-assigned URL once you have it
+  (e.g. `https://fleetos.onrender.com`).
+
 Demo login (seeded -- see [Seeding](#seeding)):
 
 | Email | Password | Role |
