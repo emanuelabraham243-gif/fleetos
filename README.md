@@ -354,20 +354,100 @@ way Vehicle Management was.
   upload path. No driver-facing screen exists yet; see
   [Known limitations](#known-limitations-phase-4).
 
+### Driver Operations (Phase 5)
+
+The Driver module: a full operational record for each driver, built on the
+principle that FleetOS records facts and lets an authorized person record a
+decision -- it never infers intent, fault, or a "score" from raw events.
+
+- **Every screen is derived, never a duplicate field**
+  (`src/lib/domain/driver.ts`) -- a driver's "current vehicle" and "current
+  trip" are never stored on the driver row; they're computed each time from
+  `vehicle_driver_assignments` (the open row) and `trips` (an active trip
+  with this `driver_id`), the same "single source of truth" rule
+  `buildFleetBoard` established in Phase 2. `deriveDriverOperationalState()`
+  turns the administrative `status` plus that trip (if any) into one of
+  `AVAILABLE`/`ON_TRIP`/`LOADING`/`ARRIVED`/`OFF_DUTY`/`ON_LEAVE`/
+  `INACTIVE`/`UNKNOWN` -- `OFF_DUTY` is part of the type but never actually
+  derived yet, since no shift/clock-in data exists to justify it (never
+  fabricate a state the data can't support).
+- **`driver_status` normalized and extended**
+  (`supabase/migrations/20260905080000_driver_operations.sql`) -- moved to
+  the `UPPER_SNAKE_CASE` convention every status enum since Phase 2 already
+  uses, and added `ON_LEAVE` (a scheduling fact, distinct from `INACTIVE`/
+  `SUSPENDED`, which are administrative decisions). The enum had zero UI
+  call sites before this phase, so the swap was clean, not breaking.
+  `TERMINATED` (with its existing `termination_date` column) was kept as-is
+  -- nothing already there was removed.
+  Same migration adds `drivers.employee_id` (+ an org-scoped unique
+  constraint alongside a new one on `license_number`), `driver_documents.
+  document_number` (mirroring `vehicle_documents` from Phase 3), and
+  `disputes.driver_response` (see below). A follow-up migration adds
+  `drivers.license_issued_at` (a core Add-Driver field the schema had no
+  place for) and a partial unique index guaranteeing at most one *open*
+  vehicle assignment per driver, the same guarantee Phase 3 already gave
+  per vehicle.
+- **Assignment conflicts are shown, never silently resolved**
+  (`assignVehicleToDriver` in `src/app/(app)/drivers/[id]/actions.ts`) --
+  before closing out an old assignment, it checks whether this driver is
+  already on a different open assignment or an active trip, and returns a
+  warning a dispatcher has to explicitly confirm (`force=true`) rather than
+  applying the change unasked. `EndAssignmentButton` covers the "remove
+  driver from vehicle" case the spec calls out separately.
+- **Disputes gain a driver side, not a driver-specific system**
+  (`disputes.driver_response`, `src/lib/actions/disputes.ts`'s
+  `recordDriverResponse`) -- reuses the exact disputes table Phase 4
+  connected to trips/deliveries/vehicles; `driver_id` was already a column
+  from Phase 1. A driver's response is appended (timestamped), never
+  replacing what was there before, and the disputes table now carries the
+  Phase 1 audit trigger for the first time, so every version of that field
+  is provably in `audit_logs`, not just the current one.
+- **Documents reuse the Phase 1 architecture exactly** -- `driver_documents`
+  already existed (Phase 1 built it alongside `vehicle_documents`), and
+  `computeDocumentStatus()` (Phase 3) needed no changes to work for
+  driver licenses/medical cards/training certificates too. The one real
+  gap this phase closed: no upload flow existed anywhere in the app before
+  now (`vehicle_documents.file_url` has always been `null` in every
+  environment). `uploadDriverDocument` uploads to the existing private
+  `documents` Storage bucket under `<organization_id>/drivers/<driver_id>/...`
+  and `getDriverDocuments` generates a short-lived signed URL per document
+  at read time -- the bucket has no public-read policy, so the raw storage
+  path is never rendered as a direct link. The same latent gap (a
+  `file_url` with no way to view it) still exists for vehicle documents;
+  fixing that wasn't this phase's job, since nothing there was ever broken
+  by real use (all rows are still `null`).
+- **GPS never attaches to a driver directly** -- the Driver Detail page has
+  no GPS section of its own; a driver's location is always reached through
+  `Driver → vehicle_driver_assignments/trips → Vehicle → vehicle_locations`,
+  exactly as the spec requires. If a driver changes vehicles, their GPS
+  picture changes with them automatically, because nothing was ever stored
+  redundantly in the first place.
+- **Operational Performance is plain counts, not a score**
+  (`src/lib/data/driver-metrics.ts`) -- completed trips, active trips,
+  completed/partial/refused/damaged deliveries, incident count, and total
+  distance (`null` when no completed trip has a distance on file) are each
+  their own labeled number. There is no combined score, no ranking, and no
+  "good driver / bad driver" classification anywhere in the module.
+- **Timeline merges existing sources** (`src/lib/data/driver-activity.ts`)
+  -- `audit_logs` for the driver's own record, their trips, and their
+  deliveries, plus `vehicle_driver_assignments` open/close events. Same
+  merge-and-sort pattern as `getVehicleHistory` (Phase 3) and
+  `getTripTimeline` (Phase 4); no new event-log table.
+
 ## What's deliberately not here
 
 No CRUD for Finance beyond Fuel/Expenses, Compliance, Intelligence, or
-Issues beyond a working Incidents-report link-out and the new Disputes
-linkage (the standalone Disputes list/detail screens themselves are still
-placeholders -- disputes can be *raised* from a trip or delivery, but
-there's no `/issues/disputes` management UI yet), plus the quick-action
-routes still deferred from Phase 2/3 (`/finance/fuel/new`,
-`/finance/expenses/new`, `/issues/incidents/new`, `/maintenance/new`
-render placeholders). No non-mock GPS adapters, no Amharic/i18n UI
-(deliberately deferred, but the token layer is ready for it -- see
-[Language-neutral by design](#language-neutral-by-design)), no government/
-regulatory integrations, no driver-facing mobile app (see
-[Known limitations](#known-limitations-phase-4)). The schema, RLS, and
+Issues beyond a working Incidents-report link-out and the Disputes linkage
+(the standalone Disputes list/detail screens themselves are still
+placeholders -- disputes can be *raised* and responded to from a trip,
+delivery, or driver page, but there's no `/issues/disputes` management UI
+yet), plus the quick-action routes still deferred from Phase 2/3
+(`/finance/fuel/new`, `/finance/expenses/new`, `/issues/incidents/new`,
+`/maintenance/new` render placeholders). No non-mock GPS adapters, no
+Amharic/i18n UI (deliberately deferred, but the token layer is ready for it
+-- see [Language-neutral by design](#language-neutral-by-design)), no
+government/regulatory integrations, no driver-facing mobile app (see
+[Known limitations](#known-limitations-phase-5)). The schema, RLS, and
 navigation route for every deferred module already exist -- only the
 working screen is deferred.
 
@@ -393,11 +473,17 @@ covering every real-world outcome -- `IN_TRANSIT`, `DELIVERED`,
 `DAMAGED` (a second consignment on `TR-002`, demonstrating one trip with
 multiple deliveries), `PARTIALLY_DELIVERED`, `REFUSED`, `CANCELLED`, and
 `ARRIVED` (awaiting confirmation, for exercising the confirmation dialog).
-All four were applied directly against the Supabase project for this
+`supabase/seed_phase5.sql` assigns each of the 5 drivers an `employee_id`
+and a `license_issued_at`, moves one driver (Henok Girma) to `ON_LEAVE`,
+adds 8 driver documents spanning `VALID`/`EXPIRING_SOON`/`EXPIRED` license
+statuses plus a medical card and a training certificate, and adds one
+dispute connecting the refused `TR-004`/`DL-004` delivery to the driver who
+ran it, with a driver response preserved alongside the client's side.
+All five were applied directly against the Supabase project for this
 environment; on a fresh project, run the migrations in
-`supabase/migrations/` in order, then all four seed files in order
+`supabase/migrations/` in order, then all five seed files in order
 (`seed.sql`, `seed_phase2.sql`, `seed_phase3_ethiopia.sql`,
-`seed_phase4.sql`).
+`seed_phase4.sql`, `seed_phase5.sql`).
 
 ## Known limitations (Phase 2)
 
@@ -473,6 +559,40 @@ environment; on a fresh project, run the migrations in
   `TR-006`) are `IN_TRANSIT`/`ARRIVED` and their GPS freshness will
   correctly decay to `DELAYED`/`OFFLINE` as real time passes after seeding,
   same honest behavior as every other phase.
+
+## Known limitations (Phase 5)
+
+- **Role restrictions are still app-layer only, not yet RLS** -- same
+  constraint as every prior phase, now also covering `drivers`/
+  `driver_documents`. `canManageFleet` gates every UI control and Server
+  Action; the underlying RLS policies still let any org member write.
+- **The Driver → Vehicle assignment invariant is now DB-enforced
+  (one open assignment per driver, mirroring the existing per-vehicle
+  guarantee), but the driver ↔ active-trip conflict is app-layer only** --
+  `assignVehicleToDriver` checks for it and shows a warning, but nothing in
+  the schema stops a direct write from putting a driver on two active
+  trips at once. A trigger enforcing that is a natural next step.
+- **`OFF_DUTY` is a defined operational state that's never actually
+  derived** -- there's no shift/clock-in data anywhere in the schema to
+  justify showing it, so `deriveDriverOperationalState` never returns it
+  yet. Included in the type for when that data exists, not faked now.
+- **The same `file_url`-as-private-path gap in `vehicle_documents` (Phase
+  1/3) is now fixed for `driver_documents` but not retroactively for
+  vehicles** -- every `vehicle_documents.file_url` in every environment
+  has always been `null` (no upload flow ever existed for it before this
+  phase either), so nothing that worked before is broken; fixing the
+  vehicle side is additive cleanup, not something this phase's scope
+  required.
+- **Driver document upload is a single file per document row**, matching
+  the same one-file-per-submission scope note as Phase 4's delivery
+  evidence -- multiple files per document type is additive when needed.
+- **The Disputes list/detail management screens (`/issues/disputes`)
+  still don't exist** -- disputes can be raised and responded to from a
+  trip, delivery, or driver page (three phases of linkage now: Phase 1's
+  base table, Phase 4's trip/delivery/vehicle columns, this phase's
+  `driver_response`), but there is still no standalone place to browse or
+  triage all disputes across the organization.
+- **GPS still goes stale without a sync** -- unchanged since Phase 2.
 
 ## Verification performed
 
@@ -610,3 +730,53 @@ environment; on a fresh project, run the migrations in
   file actually lands in the `attachments` Storage bucket via a live
   browser upload) is the one remaining check for this phase, same
   limitation every phase before it has carried.
+
+**Phase 5 (additional):**
+- `npm run build`, `npx tsc --noEmit`, `npx eslint .` -- all clean, run
+  after every file change through this phase. 40 routes now, including
+  `/drivers`, `/drivers/new`, `/drivers/[id]`, and `/drivers/[id]/edit`.
+- All 3 Phase 5 migrations (driver `employee_id`/license uniqueness/
+  `driver_status` uppercase+`ON_LEAVE`/`driver_documents.document_number`/
+  `disputes.driver_response`; `drivers.license_issued_at`; the one-open-
+  assignment-per-driver partial unique index) applied to and verified
+  against the live database -- confirmed via `pg_enum` that the swapped
+  `driver_status` enum has exactly the 5 intended values, via
+  `pg_indexes` that the new partial unique index exists alongside the
+  pre-existing per-vehicle one, and via `pg_trigger` that `disputes`
+  already carried the Phase 1 audit trigger (so no redundant trigger was
+  added, avoiding the exact `already exists` migration error this surfaced
+  and was fixed on the first apply attempt).
+- Re-ran the security advisor after all 3 migrations: no new findings
+  beyond the same pre-existing intentional ones from every prior phase --
+  no new RLS gaps on `drivers`/`driver_documents`/`disputes`, and the
+  `documents` Storage bucket's existing org-prefixed policies (unchanged)
+  correctly scope the new driver-document upload path.
+- Seed data (`seed_phase5.sql`) was applied directly and then verified
+  with join queries mirroring the app's own query shapes: the driver
+  board's derivation query (driver → open assignment → active trip)
+  returns the expected operational picture for all 5 drivers (e.g. Henok
+  Girma correctly shows `ON_LEAVE` with no active trip; Samuel Bekele
+  shows no vehicle and no trip); the dispute join (dispute → driver →
+  trip → delivery → vehicle → client) resolves every relation for the
+  seeded `TR-004`/`DL-004` dispute exactly as `getDriverDisputes` selects
+  it.
+- The `dispute_status` enum was checked directly against `pg_enum` after
+  an insert attempt failed on a guessed value (`'investigating'`) --
+  caught the mismatch, fixed both the seed data and the
+  `DriverDisputesTab` component's status-label/badge maps (which had the
+  same wrong guessed values), and re-verified the corrected insert
+  succeeded. A real example of verifying against the schema instead of
+  assuming an enum's shape.
+- Noticed, incidentally, that trip `TR-001` had genuinely transitioned
+  from `IN_TRANSIT` to `ARRIVED` in `audit_logs` with a timestamp inside
+  this working session -- i.e. real usage of the Phase 4 UI (New Trip /
+  Dispatch / Trip Detail's status-transition buttons) happened live in a
+  browser during this session, independent of anything this phase did.
+  Not something this phase verified itself, but evidence the Phase 4
+  workflow functions in a real browser, not just against direct SQL.
+- **Not verified** (same constraint as every prior phase): an authenticated
+  browser session clicking through Add/Edit Driver, the Assign Vehicle
+  conflict-warning flow, or the Upload Document dialog's file upload and
+  signed-URL "View" link end-to-end. All of it was instead verified at the
+  data/query layer as shown above, plus a full production build succeeding
+  with every new route present.

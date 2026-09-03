@@ -1,6 +1,7 @@
 import type { TripStatus } from "@/lib/domain/trip";
 import type { DeliveryStatus } from "@/lib/domain/delivery";
 import type { DocumentStatus } from "@/lib/domain/document";
+import type { DriverOperationalState, DriverStatus } from "@/lib/domain/driver";
 import type { TripStopStatus, TripStopType } from "@/lib/domain/trip-stop";
 import type { VehicleListStatus, VehicleOperationalStatus } from "@/lib/domain/vehicle";
 import type { Database } from "@/lib/supabase/database.types";
@@ -79,6 +80,35 @@ export const DOCUMENT_STATUS_LABEL: Record<DocumentStatus, string> = {
   VALID: "Valid",
   EXPIRING_SOON: "Expiring Soon",
   EXPIRED: "Expired",
+  UNKNOWN: "Unknown",
+};
+
+type DriverDocumentType = Database["public"]["Enums"]["document_type_driver"];
+
+export const DRIVER_DOCUMENT_TYPE_LABEL: Record<DriverDocumentType, string> = {
+  license: "Driving License",
+  medical_card: "Medical/Fitness Certificate",
+  background_check: "Background Check",
+  training_certificate: "Training Certificate",
+  other: "Document",
+};
+
+export const DRIVER_STATUS_LABEL: Record<DriverStatus, string> = {
+  ACTIVE: "Active",
+  INACTIVE: "Inactive",
+  ON_LEAVE: "On Leave",
+  SUSPENDED: "Suspended",
+  TERMINATED: "Terminated",
+};
+
+export const DRIVER_OPERATIONAL_STATE_LABEL: Record<DriverOperationalState, string> = {
+  AVAILABLE: "Available",
+  ON_TRIP: "On Trip",
+  LOADING: "Loading",
+  ARRIVED: "Arrived",
+  OFF_DUTY: "Off Duty",
+  ON_LEAVE: "On Leave",
+  INACTIVE: "Inactive",
   UNKNOWN: "Unknown",
 };
 

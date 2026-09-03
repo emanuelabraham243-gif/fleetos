@@ -111,6 +111,30 @@ export async function getDeliverySummary(
   };
 }
 
+/**
+ * Every delivery reachable through one driver's trips, newest first --
+ * `deliveries` has no `driver_id` of its own (a delivery belongs to a trip,
+ * a trip belongs to a driver), so this joins through `trips` with an inner
+ * embed to filter on the related row rather than adding a duplicate column.
+ */
+export async function getDeliveriesByDriverId(
+  supabase: SupabaseClient<Database>,
+  driverId: string,
+): Promise<DeliveryListItem[]> {
+  const { data, error } = await supabase
+    .from("deliveries")
+    .select(
+      "*, trip:trips!inner(id, trip_number, vehicle_id, driver_id, vehicle:vehicles(id, unit_number), driver:drivers(id, full_name)), client:clients(id, name), trip_stop:trip_stops(id, location)",
+    )
+    .eq("trip.driver_id", driverId)
+    .order("scheduled_at", { ascending: false, nullsFirst: false });
+
+  if (error) {
+    throw new Error(`Failed to load driver deliveries: ${error.message}`);
+  }
+  return data as unknown as DeliveryListItem[];
+}
+
 /** Single-delivery read for the Delivery Detail page. Returns null if not found (or not in the caller's org, via RLS). */
 export async function getDeliveryById(
   supabase: SupabaseClient<Database>,

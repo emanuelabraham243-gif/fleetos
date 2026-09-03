@@ -28,14 +28,16 @@ export function RaiseDisputeDialog({
   tripId = null,
   deliveryId = null,
   vehicleId = null,
+  driverId = null,
 }: {
   tripId?: string | null;
   deliveryId?: string | null;
   vehicleId?: string | null;
+  driverId?: string | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const boundAction = createDispute.bind(null, { tripId, deliveryId, vehicleId });
+  const boundAction = createDispute.bind(null, { tripId, deliveryId, vehicleId, driverId });
   const [state, formAction, pending] = useActionState<CreateDisputeState, FormData>(
     boundAction,
     null,

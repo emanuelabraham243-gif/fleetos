@@ -18,7 +18,12 @@ export type CreateDisputeState = { error: string } | { success: true } | null;
  * form itself.
  */
 export async function createDispute(
-  context: { tripId: string | null; deliveryId: string | null; vehicleId: string | null },
+  context: {
+    tripId: string | null;
+    deliveryId: string | null;
+    vehicleId: string | null;
+    driverId?: string | null;
+  },
   _prevState: CreateDisputeState,
   formData: FormData,
 ): Promise<CreateDisputeState> {
@@ -48,6 +53,7 @@ export async function createDispute(
     trip_id: context.tripId,
     delivery_id: context.deliveryId,
     vehicle_id: context.vehicleId,
+    driver_id: context.driverId ?? null,
   });
 
   if (error) {
@@ -56,7 +62,55 @@ export async function createDispute(
 
   if (context.tripId) revalidatePath(`/trips/${context.tripId}`);
   if (context.deliveryId) revalidatePath(`/deliveries/${context.deliveryId}`);
+  if (context.driverId) revalidatePath(`/drivers/${context.driverId}`);
   revalidatePath("/issues/disputes");
 
+  return { success: true };
+}
+
+export type RecordDriverResponseState = { error: string } | { success: true } | null;
+
+/**
+ * Appends the driver's own account to a dispute -- never replaces it, and
+ * never lets anyone else's edit remove what's already there. The Phase 1
+ * audit trigger (now attached to `disputes`, see driver_operations
+ * migration) proves that in the record: every version of this field is in
+ * `audit_logs`, not just the current one.
+ */
+export async function recordDriverResponse(
+  disputeId: string,
+  _prevState: RecordDriverResponseState,
+  formData: FormData,
+): Promise<RecordDriverResponseState> {
+  const profile = await getCurrentProfile();
+  if (!profile || !canManageFleet(profile.role)) {
+    return { error: "You don't have permission to record a driver response." };
+  }
+
+  const response = String(formData.get("driver_response") ?? "").trim();
+  if (!response) {
+    return { error: "A response is required." };
+  }
+
+  const supabase = await createClient();
+  const { data: dispute, error: fetchError } = await supabase
+    .from("disputes")
+    .select("id, driver_response")
+    .eq("id", disputeId)
+    .maybeSingle();
+  if (fetchError) return { error: fetchError.message };
+  if (!dispute) return { error: "Dispute not found." };
+
+  const stamp = `[${new Date().toISOString()}] ${response}`;
+  const nextResponse = dispute.driver_response ? `${dispute.driver_response}\n\n${stamp}` : stamp;
+
+  const { error } = await supabase
+    .from("disputes")
+    .update({ driver_response: nextResponse })
+    .eq("id", disputeId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/issues/disputes");
   return { success: true };
 }

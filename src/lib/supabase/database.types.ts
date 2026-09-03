@@ -480,6 +480,7 @@ export type Database = {
           description: string
           dispute_type: Database["public"]["Enums"]["dispute_type"]
           driver_id: string | null
+          driver_response: string | null
           id: string
           incident_id: string | null
           opened_at: string
@@ -499,6 +500,7 @@ export type Database = {
           description: string
           dispute_type?: Database["public"]["Enums"]["dispute_type"]
           driver_id?: string | null
+          driver_response?: string | null
           id?: string
           incident_id?: string | null
           opened_at?: string
@@ -518,6 +520,7 @@ export type Database = {
           description?: string
           dispute_type?: Database["public"]["Enums"]["dispute_type"]
           driver_id?: string | null
+          driver_response?: string | null
           id?: string
           incident_id?: string | null
           opened_at?: string
@@ -591,6 +594,7 @@ export type Database = {
       driver_documents: {
         Row: {
           created_at: string
+          document_number: string | null
           document_type: Database["public"]["Enums"]["document_type_driver"]
           driver_id: string
           expires_at: string | null
@@ -604,6 +608,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          document_number?: string | null
           document_type: Database["public"]["Enums"]["document_type_driver"]
           driver_id: string
           expires_at?: string | null
@@ -617,6 +622,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          document_number?: string | null
           document_type?: Database["public"]["Enums"]["document_type_driver"]
           driver_id?: string
           expires_at?: string | null
@@ -650,11 +656,13 @@ export type Database = {
           archived_at: string | null
           created_at: string
           email: string | null
+          employee_id: string | null
           full_name: string
           hire_date: string | null
           id: string
           license_class: string | null
           license_expiry: string | null
+          license_issued_at: string | null
           license_number: string | null
           notes: string | null
           organization_id: string
@@ -668,11 +676,13 @@ export type Database = {
           archived_at?: string | null
           created_at?: string
           email?: string | null
+          employee_id?: string | null
           full_name: string
           hire_date?: string | null
           id?: string
           license_class?: string | null
           license_expiry?: string | null
+          license_issued_at?: string | null
           license_number?: string | null
           notes?: string | null
           organization_id: string
@@ -686,11 +696,13 @@ export type Database = {
           archived_at?: string | null
           created_at?: string
           email?: string | null
+          employee_id?: string | null
           full_name?: string
           hire_date?: string | null
           id?: string
           license_class?: string | null
           license_expiry?: string | null
+          license_issued_at?: string | null
           license_number?: string | null
           notes?: string | null
           organization_id?: string
@@ -2520,7 +2532,12 @@ export type Database = {
         | "inspection_certificate"
         | "title"
         | "other"
-      driver_status: "active" | "inactive" | "suspended" | "terminated"
+      driver_status:
+        | "ACTIVE"
+        | "INACTIVE"
+        | "ON_LEAVE"
+        | "SUSPENDED"
+        | "TERMINATED"
       evidence_kind:
         | "fact"
         | "calculation"
@@ -2812,7 +2829,13 @@ export const Constants = {
         "title",
         "other",
       ],
-      driver_status: ["active", "inactive", "suspended", "terminated"],
+      driver_status: [
+        "ACTIVE",
+        "INACTIVE",
+        "ON_LEAVE",
+        "SUSPENDED",
+        "TERMINATED",
+      ],
       evidence_kind: [
         "fact",
         "calculation",
