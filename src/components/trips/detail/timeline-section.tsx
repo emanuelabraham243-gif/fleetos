@@ -1,13 +1,13 @@
 import { Card, CardContent } from "@/components/ui/card";
-import type { VehicleHistoryEvent } from "@/lib/data/vehicle-history";
+import type { TripTimelineEvent } from "@/lib/data/trip-timeline";
 import { formatDateTime } from "@/lib/format-time";
 
-export function HistoryTab({ events }: { events: VehicleHistoryEvent[] }) {
+export function TimelineSection({ events }: { events: TripTimelineEvent[] }) {
   if (events.length === 0) {
     return (
       <Card className="border-dashed">
         <CardContent className="text-muted-foreground py-10 text-center text-sm">
-          No history recorded for this vehicle yet.
+          No timeline events recorded yet.
         </CardContent>
       </Card>
     );

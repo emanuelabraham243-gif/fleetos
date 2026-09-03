@@ -1,5 +1,7 @@
 import type { TripStatus } from "@/lib/domain/trip";
+import type { DeliveryStatus } from "@/lib/domain/delivery";
 import type { DocumentStatus } from "@/lib/domain/document";
+import type { TripStopStatus, TripStopType } from "@/lib/domain/trip-stop";
 import type { VehicleListStatus, VehicleOperationalStatus } from "@/lib/domain/vehicle";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -20,6 +22,33 @@ export const TRIP_STATUS_LABEL: Record<TripStatus, string> = {
   DELIVERED: "Delivered",
   COMPLETED: "Completed",
   CANCELLED: "Cancelled",
+};
+
+export const DELIVERY_STATUS_LABEL: Record<DeliveryStatus, string> = {
+  PENDING: "Pending",
+  IN_TRANSIT: "In Transit",
+  ARRIVED: "Arrived",
+  DELIVERED: "Delivered",
+  PARTIALLY_DELIVERED: "Partially Delivered",
+  REFUSED: "Refused",
+  DAMAGED: "Damaged",
+  CANCELLED: "Cancelled",
+};
+
+export const TRIP_STOP_STATUS_LABEL: Record<TripStopStatus, string> = {
+  PLANNED: "Planned",
+  ARRIVED: "Arrived",
+  IN_PROGRESS: "In Progress",
+  COMPLETED: "Completed",
+  SKIPPED: "Skipped",
+};
+
+export const TRIP_STOP_TYPE_LABEL: Record<TripStopType, string> = {
+  pickup: "Pickup",
+  dropoff: "Drop-off",
+  fuel: "Fuel stop",
+  rest: "Rest stop",
+  other: "Other",
 };
 
 export const VEHICLE_OPERATIONAL_STATUS_LABEL: Record<VehicleOperationalStatus, string> = {

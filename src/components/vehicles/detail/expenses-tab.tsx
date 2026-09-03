@@ -8,6 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatDate } from "@/lib/format-time";
 import type { VehicleExpense } from "@/lib/data/expenses";
 import { formatCurrency } from "@/lib/format-currency";
 import { EXPENSE_CATEGORY_LABEL } from "@/lib/i18n/labels";
@@ -40,11 +41,7 @@ export function ExpensesTab({ expenses }: { expenses: VehicleExpense[] }) {
           {expenses.map((expense) => (
             <TableRow key={expense.id}>
               <TableCell className="text-xs">
-                {new Date(expense.occurred_at).toLocaleDateString(undefined, {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })}
+                {formatDate(expense.occurred_at)}
               </TableCell>
               <TableCell>
                 <Badge variant="outline">{EXPENSE_CATEGORY_LABEL[expense.category]}</Badge>

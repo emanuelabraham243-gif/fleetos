@@ -14,16 +14,12 @@ import {
 } from "@/components/ui/table";
 import type { VehicleTrip } from "@/lib/data/vehicles";
 import { formatCurrency } from "@/lib/format-currency";
+import { formatDateTime as formatDateTimeAddis } from "@/lib/format-time";
 import { TRIP_STATUS_LABEL } from "@/lib/i18n/labels";
 
 function formatDateTime(value: string | null): string {
   if (!value) return "—";
-  return new Date(value).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatDateTimeAddis(value);
 }
 
 export function TripsTab({

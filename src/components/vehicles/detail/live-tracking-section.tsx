@@ -7,6 +7,7 @@ import { FleetMapLoader } from "@/components/fleet-map-loader";
 import type { FleetMapVehicle } from "@/components/fleet-map";
 import type { GpsEvent } from "@/lib/data/gps-events";
 import type { VehicleWithLocation } from "@/lib/data/vehicles";
+import { formatClockTime } from "@/lib/format-time";
 import { formatGpsFreshness } from "@/lib/gps/status";
 
 export function LiveTrackingSection({
@@ -86,10 +87,7 @@ export function LiveTrackingSection({
               {recentEvents.map((event) => (
                 <div key={event.id} className="flex items-center gap-3 text-sm">
                   <span className="text-muted-foreground w-16 shrink-0 tabular-nums">
-                    {new Date(event.recorded_at).toLocaleTimeString(undefined, {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    {formatClockTime(event.recorded_at)}
                   </span>
                   <span>
                     {event.speed_kph != null ? `${event.speed_kph} km/h` : "no speed data"}

@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import type { VehicleIncident } from "@/lib/data/incidents";
+import { formatFullDateTime } from "@/lib/format-time";
 import {
   INCIDENT_SEVERITY_LABEL,
   INCIDENT_STATUS_LABEL,
@@ -41,7 +42,7 @@ export function IncidentsTab({ incidents }: { incidents: VehicleIncident[] }) {
             </div>
             <p className="text-sm">{incident.description}</p>
             <div className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs">
-              <span>{new Date(incident.occurred_at).toLocaleString()}</span>
+              <span>{formatFullDateTime(incident.occurred_at)}</span>
               {incident.location ? <span>{incident.location}</span> : null}
               {incident.driver ? <span>Driver: {incident.driver.full_name}</span> : null}
               {incident.trip ? <span>Trip: {incident.trip.trip_number}</span> : null}

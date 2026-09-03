@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/table";
 import type { FuelMetrics, FuelTransaction } from "@/lib/data/fuel";
 import { formatCurrency } from "@/lib/format-currency";
+import { formatDate } from "@/lib/format-time";
 
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
@@ -77,11 +78,7 @@ export function FuelTab({
             {transactions.map((tx) => (
               <TableRow key={tx.id}>
                 <TableCell className="text-xs">
-                  {new Date(tx.occurred_at).toLocaleDateString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
+                  {formatDate(tx.occurred_at)}
                 </TableCell>
                 <TableCell>{tx.vendor_name ?? "—"}</TableCell>
                 <TableCell>{Number(tx.volume_liters).toLocaleString()} L</TableCell>

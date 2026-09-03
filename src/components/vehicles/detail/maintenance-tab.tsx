@@ -11,6 +11,7 @@ import {
 import type { VehicleMaintenance } from "@/lib/data/maintenance";
 import { daysUntil, formatDueText } from "@/lib/days-until";
 import { formatCurrency } from "@/lib/format-currency";
+import { formatDate } from "@/lib/format-time";
 
 function ScheduleLine({
   title,
@@ -146,10 +147,10 @@ export function MaintenanceTab({ maintenance }: { maintenance: VehicleMaintenanc
                       </Badge>
                     </TableCell>
                     <TableCell className="text-xs">
-                      {new Date(wo.opened_at).toLocaleDateString()}
+                      {formatDate(wo.opened_at)}
                     </TableCell>
                     <TableCell className="text-xs">
-                      {wo.closed_at ? new Date(wo.closed_at).toLocaleDateString() : "—"}
+                      {wo.closed_at ? formatDate(wo.closed_at) : "—"}
                     </TableCell>
                     <TableCell>
                       {wo.total_cost !== null ? formatCurrency(Number(wo.total_cost), wo.currency) : "—"}

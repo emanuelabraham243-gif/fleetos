@@ -259,20 +259,117 @@ names, and Ethiopian Birr (`ETB`) as the transaction currency throughout.
 None of this touches the schema, RLS, or the GPS abstraction -- see
 `supabase/seed_phase3_ethiopia.sql`.
 
+### Trips, Dispatch & Deliveries (Phase 4)
+
+The first real operational workflow module: trip creation through dispatch,
+transit, arrival, delivery, and completion, plus the deliveries this
+produces. Nothing here replaces Phase 1-3 architecture -- it's four small
+additive migrations, a domain layer, a data layer, and pages built the same
+way Vehicle Management was.
+
+- **State machine, not a dropdown** (`src/lib/domain/trip.ts`,
+  `src/lib/domain/delivery.ts`) -- `ALLOWED_TRANSITIONS` maps every status
+  to the only statuses it's legal to move to next (`DRAFT` → `ASSIGNED` →
+  `LOADING` → `DISPATCHED` → `IN_TRANSIT` → `ARRIVED` → `DELIVERED` →
+  `COMPLETED`, with an explicit `CANCELLED` branch off every non-terminal
+  status). `canTransition()`/`canTransitionDelivery()` is the single
+  server-side gate (`transitionTripStatus`/`transitionDeliveryStatus` in
+  `src/app/(app)/trips/actions.ts` and `.../deliveries/actions.ts`) --
+  every caller (Dispatch board buttons, Trip/Delivery Detail actions) goes
+  through the same check, so a status can never skip a step regardless of
+  which screen triggered the change.
+- **Trip fields Phase 1 had no use for yet**
+  (`supabase/migrations/20260905070000_trip_cargo_client_audit.sql`) --
+  `client_id`, cargo description/quantity/weight, `reference_number`,
+  `customer_notes` -- plus the Phase 1 audit trigger attached to `trips`
+  for the first time (trips weren't in the original critical-audit list).
+- **`trip_stops` gets its own lifecycle**
+  (`.../20260905070100_trip_stops_status.sql`) -- a new `trip_stop_status`
+  enum (`PLANNED`/`ARRIVED`/`IN_PROGRESS`/`COMPLETED`/`SKIPPED`) so a stop
+  can be tracked independently of the parent trip's own status. Simple
+  trips carry zero stop rows and stay simple; nothing forces a stop onto a
+  direct A-to-B trip.
+- **`delivery_status` swapped for the full real-world set**
+  (`.../20260905070200_delivery_status_v2.sql`) -- `PENDING`/`IN_TRANSIT`/
+  `ARRIVED`/`DELIVERED`/`PARTIALLY_DELIVERED`/`REFUSED`/`DAMAGED`/
+  `CANCELLED` replaces Phase 1's placeholder enum (the table had zero rows
+  in every environment, so this was a clean swap, the same pattern used for
+  `trip_status` in Phase 2). Added `delivery_number`, `expected_quantity`
+  and `delivered_quantity` as two separate columns (never collapsed into
+  one "delivered: yes/no"), `quantity_unit`, `arrived_at` (distinct from
+  `delivered_at` -- arrival and delivery confirmation are different
+  events), and `confirmed_by`.
+- **Disputes connect to trips/deliveries/vehicles**
+  (`.../20260905070300_disputes_trip_delivery_vehicle.sql`) -- three
+  nullable FK columns on the existing `disputes` table, not a new
+  dispute system. `RaiseDisputeDialog`
+  (`src/components/disputes/raise-dispute-dialog.tsx`) is the one place a
+  dispute gets created, reused from both Trip Detail and Delivery Detail.
+- **GPS stays exactly as GPS-abstracted as before** -- the Trip Detail GPS
+  tab (`src/components/trips/detail/gps-section.tsx`) reads the same
+  `vehicle_locations`/`gps_events` and the same `computeGpsStatus`/
+  `formatGpsFreshness` Phase 1/2 already built. The one addition is
+  `detectPossibleArrival()` (`src/lib/gps/arrival-proximity.ts`) -- a
+  haversine distance check against a small Ethiopian city-coordinate table
+  (`src/lib/geo/ethiopia-cities.ts`) that, when a trip is `DISPATCHED`/
+  `IN_TRANSIT` and the vehicle's last fix is within 5 km of the
+  destination, surfaces a dismissible "Possible arrival detected" advisory.
+  It never writes to the trip -- confirming arrival is always a manual,
+  explicit status transition, and a stale or missing GPS fix never changes
+  a trip's status either (an `OFFLINE` badge is just a badge).
+- **Financial section only shows what's actually attributable**
+  (`src/lib/data/trip-finance.ts`) -- revenue is direct (`revenues.trip_id`
+  exists); fuel/expenses have no `trip_id` in the schema (they're
+  vehicle-scoped only), so they're correlated by time window (occurred
+  during the trip's own start/end) and labeled "during this trip", never
+  "trip cost", so nothing overclaims a link the data doesn't actually have.
+  Every figure is `null` ("No data yet") rather than `0` when nothing
+  matches, same rule as the Phase 3 vehicle financial summary.
+- **Timeline merges existing audit sources** (`src/lib/data/
+  trip-timeline.ts`) -- `audit_logs` for `trips`, `trip_stops`, and
+  `deliveries` (all three now carry the Phase 1 audit trigger), the same
+  merge-and-sort pattern `getVehicleHistory` established in Phase 3. No new
+  event-log table.
+- **Delivery evidence reuses Phase 1's `attachments` table and storage
+  bucket** (`src/lib/data/attachments.ts`, the upload path in
+  `src/app/(app)/deliveries/actions.ts`) -- `entity_type = 'delivery'`
+  already existed in the Phase 1 check constraint, so confirming a delivery
+  with a photo just uploads to the existing `attachments` storage bucket
+  under `<organization_id>/deliveries/<delivery_id>/...` and inserts one row,
+  the same architecture every other entity type already uses. No parallel
+  file-storage system.
+- **Africa/Addis_Ababa timestamps everywhere** (`src/lib/format-time.ts`)
+  -- every operational timestamp (trip/delivery detail, timelines, GPS
+  events, the Trips/Deliveries tables) now formats with
+  `timeZone: "Africa/Addis_Ababa"` explicitly rather than the browser's
+  local timezone. This replaced the ad-hoc `toLocaleString(undefined, ...)`
+  calls Phases 1-3 had scattered across 8 vehicle-detail/command-center
+  components, so business-record times now read the same everywhere,
+  consistently, regardless of which browser or device views them.
+- **Driver-mobile-app preparation is structural, not built**: every action
+  a future driver app would need (start trip, report issue, record fuel,
+  confirm arrival, submit delivery evidence) already exists as a
+  Server Action or a data-layer mutation a driver-scoped UI could call
+  later -- `transitionTripStatus`, `confirmDelivery`, the attachments
+  upload path. No driver-facing screen exists yet; see
+  [Known limitations](#known-limitations-phase-4).
+
 ## What's deliberately not here
 
 No CRUD for Finance beyond Fuel/Expenses, Compliance, Intelligence, or
-Issues beyond Incidents, and no Trips module beyond what a vehicle's Trips
-tab already shows (their nav routes, plus the quick-action routes --
-`/trips/new`, `/finance/fuel/new`, `/finance/expenses/new`,
-`/issues/incidents/new`, `/maintenance/new` -- render placeholders), no
-non-mock GPS adapters, no Amharic/i18n UI (deliberately deferred, but the
-token layer is ready for it -- see
+Issues beyond a working Incidents-report link-out and the new Disputes
+linkage (the standalone Disputes list/detail screens themselves are still
+placeholders -- disputes can be *raised* from a trip or delivery, but
+there's no `/issues/disputes` management UI yet), plus the quick-action
+routes still deferred from Phase 2/3 (`/finance/fuel/new`,
+`/finance/expenses/new`, `/issues/incidents/new`, `/maintenance/new`
+render placeholders). No non-mock GPS adapters, no Amharic/i18n UI
+(deliberately deferred, but the token layer is ready for it -- see
 [Language-neutral by design](#language-neutral-by-design)), no government/
-regulatory integrations. The schema, RLS, and navigation route for every
-deferred module already exist -- only the working screen is deferred.
-Trip rows aren't clickable yet (no `/trips/[id]` route exists) -- linking
-to one would be exactly the "fake functionality" this project avoids.
+regulatory integrations, no driver-facing mobile app (see
+[Known limitations](#known-limitations-phase-4)). The schema, RLS, and
+navigation route for every deferred module already exist -- only the
+working screen is deferred.
 
 ## Seeding
 
@@ -287,11 +384,20 @@ schedule so "Attention Required" has real evidence, and fresh GPS events).
 `supabase/seed_phase3_ethiopia.sql` then re-anchors that same data on
 Ethiopia (renames drivers, restyles vehicles/plates, relocates GPS, adds
 `TR-002`-`TR-005` across other Ethiopian corridors, fuel/expense/incident/
-document records, and the 4 persistent driver assignments). All three
-were applied directly against the Supabase project for this environment;
-on a fresh project, run the migrations in `supabase/migrations/` in order,
-then all three seed files in order (`seed.sql`, `seed_phase2.sql`,
-`seed_phase3_ethiopia.sql`).
+document records, and the 4 persistent driver assignments).
+`supabase/seed_phase4.sql` adds 3 clients, cargo/client details on
+`TR-001`-`TR-005`, a 6th trip (`TR-006`, `ARRIVED`), two multi-stop
+examples (`TR-001`: Mojo fuel stop then Hawassa drop-off; `TR-003`: Awash
+fuel stop then Dire Dawa drop-off, both fully completed), and 7 deliveries
+covering every real-world outcome -- `IN_TRANSIT`, `DELIVERED`,
+`DAMAGED` (a second consignment on `TR-002`, demonstrating one trip with
+multiple deliveries), `PARTIALLY_DELIVERED`, `REFUSED`, `CANCELLED`, and
+`ARRIVED` (awaiting confirmation, for exercising the confirmation dialog).
+All four were applied directly against the Supabase project for this
+environment; on a fresh project, run the migrations in
+`supabase/migrations/` in order, then all four seed files in order
+(`seed.sql`, `seed_phase2.sql`, `seed_phase3_ethiopia.sql`,
+`seed_phase4.sql`).
 
 ## Known limitations (Phase 2)
 
@@ -319,16 +425,54 @@ then all three seed files in order (`seed.sql`, `seed_phase2.sql`,
   they were left as-is rather than risk rewriting tested Phase 1 policies
   under this phase's "don't break what works" constraint. Tightening RLS
   itself to match is a natural next step, not a redesign.
-- **Trip/fuel/expense/incident "quick actions" are still placeholders.**
-  Only Add/Edit Vehicle and Assign Driver got real forms this phase; Start
-  Trip, Record Fuel, Report Issue, and Schedule Maintenance link to the
-  existing (or newly added, for maintenance) placeholder routes with a
-  `?vehicleId=` query param that isn't consumed by anything yet.
-- **Trip rows aren't clickable.** No `/trips/[id]` page exists yet.
+- **Fuel/expense/incident "quick actions" are still placeholders.** Only
+  Add/Edit Vehicle and Assign Driver got real forms in Phase 3; Record
+  Fuel, Report Issue, and Schedule Maintenance still link to placeholder
+  routes with an unconsumed `?vehicleId=` param. (Start Trip, the fourth
+  quick action listed here originally, now works -- see Phase 4 below.)
 - **Vehicles list filters are client-side, not URL-persisted** -- they
   reset on refresh; not shareable/bookmarkable yet.
 - **GPS still goes stale without a sync** -- same as Phase 2's limitation,
   unchanged by this phase.
+
+## Known limitations (Phase 4)
+
+- **Role restrictions are still app-layer only, not yet RLS** -- same
+  constraint as Phase 3, now also covering `trips`/`trip_stops`/
+  `deliveries`/`disputes`: `canManageFleet` gates every UI control and
+  Server Action, but the underlying RLS policies still let any org member
+  write. Unchanged from Phase 3's note -- a deliberate, not accidental,
+  scope decision each phase so far.
+- **Trip/Delivery status changes are app-layer validated, not
+  database-enforced.** `canTransition`/`canTransitionDelivery` is the one
+  gate every Server Action goes through, but nothing stops a direct SQL
+  `UPDATE` (or a future second app) from writing an illegal status
+  transition straight into the `trips`/`deliveries` tables. A database
+  constraint or trigger enforcing the same state machine is a natural
+  next step, not a redesign.
+- **No date-range or client filter on the Trips page yet.** Status,
+  vehicle, driver, and free-text search all work and compose together;
+  a scheduled-date range and a client filter (both mentioned as
+  "nice to have" alongside the others) weren't added this phase.
+- **Delivery confirmation evidence is a single file per submission**, not
+  multiple files, a delivery-document type/description field per
+  attachment, or a signature capture -- the `attachments` table already
+  supports a `description`/type-like classification (via `entity_type`
+  alone) and multiple rows per entity, so multi-file upload is additive
+  when needed, not a redesign.
+- **Trip Stops has no add/edit UI.** `trip_stops` is fully modeled and
+  displayed (status, sequence, arrival/departure, notes) and the seed data
+  demonstrates a real multi-stop trip, but stops are currently only
+  created via direct SQL/seed data -- there's no form on Trip Detail to
+  add, reorder, or update a stop's status yet.
+- **No driver-facing screens** -- Part 13 of the spec explicitly asked for
+  architecture preparation, not a driver app, so none was built. Every
+  action a driver would need is already a callable Server Action.
+- **GPS still goes stale without a sync** -- unchanged since Phase 2;
+  worth noting again because several Phase 4 demo trips (`TR-001`,
+  `TR-006`) are `IN_TRANSIT`/`ARRIVED` and their GPS freshness will
+  correctly decay to `DELAYED`/`OFFLINE` as real time passes after seeding,
+  same honest behavior as every other phase.
 
 ## Verification performed
 
@@ -409,3 +553,60 @@ then all three seed files in order (`seed.sql`, `seed_phase2.sql`,
   data layer (the queries and mutations were run directly against the live
   database as shown above); a real click-through pass from a normal
   network is the one remaining check for this phase too.
+
+**Phase 4 (additional):**
+- `npm run build`, `npx tsc --noEmit`, `npx eslint .` -- all clean, run
+  fresh after every file change through this phase, not just once at the
+  end. 41 routes now, including `/trips/[id]` and `/deliveries/[id]`.
+- All 4 Phase 4 migrations (trip cargo/client fields + audit trigger,
+  `trip_stop_status`, `delivery_status` v2 + quantity/confirmation fields,
+  disputes trip/delivery/vehicle links) applied to and verified against
+  the live database, not just locally -- confirmed via
+  `information_schema`/`pg_constraint` queries that every foreign key the
+  data layer's `select` embeds rely on actually exists (`trips.client_id`
+  → `clients`, `deliveries.trip_id`/`client_id`/`trip_stop_id`,
+  `disputes.trip_id`/`delivery_id`/`vehicle_id`) before writing a single
+  query against them.
+- Re-ran the security advisor after all 4 migrations: no new findings
+  beyond the same pre-existing intentional ones from every prior phase
+  (no new RLS gaps on `trips`/`trip_stops`/`deliveries`/`disputes`).
+- Seed data (`seed_phase4.sql`: 3 clients, cargo/client details on
+  `TR-001`-`TR-005`, a 6th trip `TR-006`, 2 multi-stop trips, 7
+  deliveries) was applied directly to the live database and then verified
+  with a join query mirroring the app's own `deliveries` query shape
+  (delivery → trip → client → trip_stop) -- confirmed all 7 deliveries
+  resolve with the correct trip/client/stop and the correct
+  expected-vs-delivered quantity split (e.g. `DL-003`:
+  expected 300, delivered 280; `DL-006`: expected 100, delivered 0,
+  `DAMAGED`), rather than trusting the insert succeeded without checking
+  what it actually produced.
+- `recent_activity_feed` re-checked after the new trips existed --
+  confirmed it still returns `TRIP_STATUS_CHANGED` rows for all of
+  them (including the new `TR-006`), verifying the Phase 2 view and the
+  Command Center's activity feed have no regression from the new trips
+  table shape (added columns, new audit trigger).
+- The state machine itself (`canTransition`/`canTransitionDelivery`) was
+  run directly (via `tsx`, against the real seeded data's statuses, not
+  just read) -- confirmed trip `TR-001` (`IN_TRANSIT`) allows only
+  `ARRIVED`/`CANCELLED` next (and `canTransition("IN_TRANSIT",
+  "DELIVERED")` is correctly `false` -- a trip can't skip straight to
+  delivered), trip `TR-006` (`ARRIVED`) allows only `DELIVERED`/
+  `CANCELLED` (a trip's own lifecycle has no partial/refused/damaged
+  branch -- that nuance lives one level down, on the delivery), a
+  *delivery* at `ARRIVED` (like `DL-007`) allows all five of
+  `DELIVERED`/`PARTIALLY_DELIVERED`/`REFUSED`/`DAMAGED`/`CANCELLED`, and
+  every terminal status (`COMPLETED`, `DAMAGED`, `CANCELLED`) allows
+  nothing further.
+- The arrival-proximity advisory (`detectPossibleArrival`) was checked
+  against `TR-006`'s actual coordinates: its destination (`Mojo`) resolves
+  to a known city in `ethiopia-cities.ts`, confirming the lookup path
+  works for real seeded data, not just synthetic test coordinates.
+- **Not verified** (same constraint as every prior phase): an authenticated
+  browser session clicking through the New Trip form, the Dispatch board's
+  status-transition buttons, or the Delivery Confirmation dialog's file
+  upload end-to-end. All of it was instead verified at the data/query
+  layer as shown above, plus a full production build succeeding with every
+  new route present. A real click-through pass (including confirming a
+  file actually lands in the `attachments` Storage bucket via a live
+  browser upload) is the one remaining check for this phase, same
+  limitation every phase before it has carried.

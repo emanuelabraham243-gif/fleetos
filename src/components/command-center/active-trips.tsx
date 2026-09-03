@@ -9,6 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { FleetBoardVehicle } from "@/lib/data/fleet";
+import { formatDateTime } from "@/lib/format-time";
 import { formatGpsFreshness } from "@/lib/gps/status";
 import type { ActiveTrip } from "@/lib/data/trips";
 import { TRIP_STATUS_LABEL } from "@/lib/i18n/labels";
@@ -64,12 +65,7 @@ export function ActiveTrips({
                 </TableCell>
                 <TableCell className="text-xs">
                   {trip.actual_start
-                    ? new Date(trip.actual_start).toLocaleString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })
+                    ? formatDateTime(trip.actual_start)
                     : "Not departed"}
                 </TableCell>
                 <TableCell className="text-xs">{freshnessLabel}</TableCell>

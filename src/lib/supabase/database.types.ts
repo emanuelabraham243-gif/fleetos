@@ -362,16 +362,23 @@ export type Database = {
       }
       deliveries: {
         Row: {
+          arrived_at: string | null
           client_id: string | null
+          confirmed_by: string | null
           created_at: string
           delivered_at: string | null
+          delivered_quantity: number | null
+          delivery_number: string | null
           description: string | null
+          expected_quantity: number | null
           id: string
           notes: string | null
           organization_id: string
           proof_of_delivery_url: string | null
+          quantity_unit: string | null
           recipient_name: string | null
           reference_number: string | null
+          refusal_reason: string | null
           scheduled_at: string | null
           status: Database["public"]["Enums"]["delivery_status"]
           trip_id: string | null
@@ -379,16 +386,23 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          arrived_at?: string | null
           client_id?: string | null
+          confirmed_by?: string | null
           created_at?: string
           delivered_at?: string | null
+          delivered_quantity?: number | null
+          delivery_number?: string | null
           description?: string | null
+          expected_quantity?: number | null
           id?: string
           notes?: string | null
           organization_id: string
           proof_of_delivery_url?: string | null
+          quantity_unit?: string | null
           recipient_name?: string | null
           reference_number?: string | null
+          refusal_reason?: string | null
           scheduled_at?: string | null
           status?: Database["public"]["Enums"]["delivery_status"]
           trip_id?: string | null
@@ -396,16 +410,23 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          arrived_at?: string | null
           client_id?: string | null
+          confirmed_by?: string | null
           created_at?: string
           delivered_at?: string | null
+          delivered_quantity?: number | null
+          delivery_number?: string | null
           description?: string | null
+          expected_quantity?: number | null
           id?: string
           notes?: string | null
           organization_id?: string
           proof_of_delivery_url?: string | null
+          quantity_unit?: string | null
           recipient_name?: string | null
           reference_number?: string | null
+          refusal_reason?: string | null
           scheduled_at?: string | null
           status?: Database["public"]["Enums"]["delivery_status"]
           trip_id?: string | null
@@ -418,6 +439,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deliveries_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -448,6 +476,7 @@ export type Database = {
           client_id: string | null
           created_at: string
           created_by: string | null
+          delivery_id: string | null
           description: string
           dispute_type: Database["public"]["Enums"]["dispute_type"]
           driver_id: string | null
@@ -458,12 +487,15 @@ export type Database = {
           resolution: string | null
           resolved_at: string | null
           status: Database["public"]["Enums"]["dispute_status"]
+          trip_id: string | null
           updated_at: string
+          vehicle_id: string | null
         }
         Insert: {
           client_id?: string | null
           created_at?: string
           created_by?: string | null
+          delivery_id?: string | null
           description: string
           dispute_type?: Database["public"]["Enums"]["dispute_type"]
           driver_id?: string | null
@@ -474,12 +506,15 @@ export type Database = {
           resolution?: string | null
           resolved_at?: string | null
           status?: Database["public"]["Enums"]["dispute_status"]
+          trip_id?: string | null
           updated_at?: string
+          vehicle_id?: string | null
         }
         Update: {
           client_id?: string | null
           created_at?: string
           created_by?: string | null
+          delivery_id?: string | null
           description?: string
           dispute_type?: Database["public"]["Enums"]["dispute_type"]
           driver_id?: string | null
@@ -490,7 +525,9 @@ export type Database = {
           resolution?: string | null
           resolved_at?: string | null
           status?: Database["public"]["Enums"]["dispute_status"]
+          trip_id?: string | null
           updated_at?: string
+          vehicle_id?: string | null
         }
         Relationships: [
           {
@@ -505,6 +542,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "disputes_delivery_id_fkey"
+            columns: ["delivery_id"]
+            isOneToOne: false
+            referencedRelation: "deliveries"
             referencedColumns: ["id"]
           },
           {
@@ -526,6 +570,20 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "disputes_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "disputes_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
         ]
@@ -1759,6 +1817,7 @@ export type Database = {
           organization_id: string
           scheduled_at: string | null
           sequence: number
+          status: Database["public"]["Enums"]["trip_stop_status"]
           stop_type: Database["public"]["Enums"]["trip_stop_type"]
           trip_id: string
           updated_at: string
@@ -1773,6 +1832,7 @@ export type Database = {
           organization_id: string
           scheduled_at?: string | null
           sequence: number
+          status?: Database["public"]["Enums"]["trip_stop_status"]
           stop_type?: Database["public"]["Enums"]["trip_stop_type"]
           trip_id: string
           updated_at?: string
@@ -1787,6 +1847,7 @@ export type Database = {
           organization_id?: string
           scheduled_at?: string | null
           sequence?: number
+          status?: Database["public"]["Enums"]["trip_stop_status"]
           stop_type?: Database["public"]["Enums"]["trip_stop_type"]
           trip_id?: string
           updated_at?: string
@@ -1812,8 +1873,14 @@ export type Database = {
         Row: {
           actual_end: string | null
           actual_start: string | null
+          cargo_description: string | null
+          cargo_quantity: number | null
+          cargo_quantity_unit: string | null
+          cargo_weight_kg: number | null
+          client_id: string | null
           contract_id: string | null
           created_at: string
+          customer_notes: string | null
           destination: string | null
           distance_km: number | null
           driver_id: string | null
@@ -1821,6 +1888,7 @@ export type Database = {
           notes: string | null
           organization_id: string
           origin: string | null
+          reference_number: string | null
           scheduled_end: string | null
           scheduled_start: string | null
           status: Database["public"]["Enums"]["trip_status"]
@@ -1831,8 +1899,14 @@ export type Database = {
         Insert: {
           actual_end?: string | null
           actual_start?: string | null
+          cargo_description?: string | null
+          cargo_quantity?: number | null
+          cargo_quantity_unit?: string | null
+          cargo_weight_kg?: number | null
+          client_id?: string | null
           contract_id?: string | null
           created_at?: string
+          customer_notes?: string | null
           destination?: string | null
           distance_km?: number | null
           driver_id?: string | null
@@ -1840,6 +1914,7 @@ export type Database = {
           notes?: string | null
           organization_id: string
           origin?: string | null
+          reference_number?: string | null
           scheduled_end?: string | null
           scheduled_start?: string | null
           status?: Database["public"]["Enums"]["trip_status"]
@@ -1850,8 +1925,14 @@ export type Database = {
         Update: {
           actual_end?: string | null
           actual_start?: string | null
+          cargo_description?: string | null
+          cargo_quantity?: number | null
+          cargo_quantity_unit?: string | null
+          cargo_weight_kg?: number | null
+          client_id?: string | null
           contract_id?: string | null
           created_at?: string
+          customer_notes?: string | null
           destination?: string | null
           distance_km?: number | null
           driver_id?: string | null
@@ -1859,6 +1940,7 @@ export type Database = {
           notes?: string | null
           organization_id?: string
           origin?: string | null
+          reference_number?: string | null
           scheduled_end?: string | null
           scheduled_start?: string | null
           status?: Database["public"]["Enums"]["trip_status"]
@@ -1867,6 +1949,13 @@ export type Database = {
           vehicle_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "trips_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "trips_contract_id_fkey"
             columns: ["contract_id"]
@@ -2397,12 +2486,14 @@ export type Database = {
       contract_rate_type: "per_mile" | "per_trip" | "flat" | "hourly" | "other"
       contract_status: "draft" | "active" | "expired" | "terminated"
       delivery_status:
-        | "pending"
-        | "picked_up"
-        | "in_transit"
-        | "delivered"
-        | "failed"
-        | "cancelled"
+        | "PENDING"
+        | "IN_TRANSIT"
+        | "ARRIVED"
+        | "DELIVERED"
+        | "PARTIALLY_DELIVERED"
+        | "REFUSED"
+        | "DAMAGED"
+        | "CANCELLED"
       dispute_status:
         | "open"
         | "under_review"
@@ -2520,6 +2611,12 @@ export type Database = {
         | "DELIVERED"
         | "COMPLETED"
         | "CANCELLED"
+      trip_stop_status:
+        | "PLANNED"
+        | "ARRIVED"
+        | "IN_PROGRESS"
+        | "COMPLETED"
+        | "SKIPPED"
       trip_stop_type: "pickup" | "dropoff" | "fuel" | "rest" | "other"
       vehicle_status:
         | "active"
@@ -2676,12 +2773,14 @@ export const Constants = {
       contract_rate_type: ["per_mile", "per_trip", "flat", "hourly", "other"],
       contract_status: ["draft", "active", "expired", "terminated"],
       delivery_status: [
-        "pending",
-        "picked_up",
-        "in_transit",
-        "delivered",
-        "failed",
-        "cancelled",
+        "PENDING",
+        "IN_TRANSIT",
+        "ARRIVED",
+        "DELIVERED",
+        "PARTIALLY_DELIVERED",
+        "REFUSED",
+        "DAMAGED",
+        "CANCELLED",
       ],
       dispute_status: [
         "open",
@@ -2795,6 +2894,13 @@ export const Constants = {
         "DELIVERED",
         "COMPLETED",
         "CANCELLED",
+      ],
+      trip_stop_status: [
+        "PLANNED",
+        "ARRIVED",
+        "IN_PROGRESS",
+        "COMPLETED",
+        "SKIPPED",
       ],
       trip_stop_type: ["pickup", "dropoff", "fuel", "rest", "other"],
       vehicle_status: [
