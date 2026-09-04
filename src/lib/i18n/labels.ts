@@ -116,16 +116,52 @@ type ExpenseCategory = Database["public"]["Enums"]["expense_category"];
 
 export const EXPENSE_CATEGORY_LABEL: Record<ExpenseCategory, string> = {
   maintenance: "Maintenance",
+  repairs: "Repairs",
   insurance: "Insurance",
   permit: "Permit",
-  toll: "Toll",
+  toll: "Road/Toll",
   parking: "Parking",
   fine: "Fine",
-  office: "Office",
+  office: "Administrative",
   parts: "Parts",
   tires: "Tires",
-  driver_related: "Driver-related",
+  driver_related: "Driver",
+  loading_unloading: "Loading/Unloading",
+  accommodation: "Accommodation",
+  meals: "Meals",
+  communication: "Communication",
   other: "Other",
+};
+
+type PaymentMethod = Database["public"]["Enums"]["payment_method"];
+
+export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
+  cash: "Cash",
+  bank_transfer: "Bank Transfer",
+  card: "Card",
+  mobile_money: "Mobile Money",
+  check: "Check",
+  other: "Other",
+};
+
+type VendorCategory = Database["public"]["Enums"]["vendor_category"];
+
+export const VENDOR_CATEGORY_LABEL: Record<VendorCategory, string> = {
+  fuel_station: "Fuel Station",
+  repair_shop: "Repair Shop",
+  parts_supplier: "Parts Supplier",
+  tire_supplier: "Tire Supplier",
+  insurance: "Insurance Provider",
+  other: "Other",
+};
+
+type ExpenseApprovalStatus = Database["public"]["Enums"]["expense_approval_status"];
+
+export const EXPENSE_APPROVAL_STATUS_LABEL: Record<ExpenseApprovalStatus, string> = {
+  RECORDED: "Recorded",
+  PENDING_REVIEW: "Pending Review",
+  APPROVED: "Approved",
+  REJECTED: "Rejected",
 };
 
 type IncidentType = Database["public"]["Enums"]["incident_type"];

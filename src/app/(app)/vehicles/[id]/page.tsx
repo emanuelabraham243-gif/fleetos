@@ -16,7 +16,9 @@ import { VehicleActionsBar } from "@/components/vehicles/detail/vehicle-actions-
 import { getDrivers } from "@/lib/data/drivers";
 import { getVehicleAssignmentHistory } from "@/lib/data/driver-assignments";
 import { getVehicleExpenses } from "@/lib/data/expenses";
-import { computeFuelMetrics, getVehicleFuelTransactions } from "@/lib/data/fuel";
+import { computeFuelMetrics, getVehicleFuelTransactions, getVehicleOdometerProvenance } from "@/lib/data/fuel";
+import { computeFuelConsumption } from "@/lib/domain/fuel-consumption";
+import { detectFuelAnomalies } from "@/lib/domain/fuel-anomaly";
 import { getRecentGpsEvents } from "@/lib/data/gps-events";
 import { getVehicleIncidents } from "@/lib/data/incidents";
 import { getVehicleMaintenance } from "@/lib/data/maintenance";
@@ -75,6 +77,7 @@ export default async function VehicleDetailPage({
   ]);
 
   const revenueByTrip = await getRevenueByTripIds(supabase, trips.map((t) => t.id));
+  const odometerProvenance = await getVehicleOdometerProvenance(supabase, id);
 
   const activeTrip = trips.find((t) => isActiveTripStatus(t.status)) ?? null;
   const currentAssignment = assignmentHistory.find((a) => !a.unassigned_at) ?? null;
@@ -89,6 +92,23 @@ export default async function VehicleDetailPage({
 
   const canManage = profile ? canManageFleet(profile.role) : false;
   const fuelMetrics = computeFuelMetrics(fuelTransactions);
+  const activeFuelTransactions = fuelTransactions.filter((t) => t.status === "active");
+  const fuelConsumption = computeFuelConsumption(activeFuelTransactions);
+  const fuelAnomalies = detectFuelAnomalies(
+    activeFuelTransactions.map((t) => ({
+      id: t.id,
+      occurred_at: t.occurred_at,
+      odometer_km: t.odometer_km,
+      volume_liters: Number(t.volume_liters),
+      receipt_url: t.receipt_url,
+    })),
+  );
+  const fuelAnomaliesByTransactionId: Record<string, typeof fuelAnomalies> = {};
+  for (const anomaly of fuelAnomalies) {
+    const list = fuelAnomaliesByTransactionId[anomaly.transactionId];
+    if (list) list.push(anomaly);
+    else fuelAnomaliesByTransactionId[anomaly.transactionId] = [anomaly];
+  }
 
   return (
     <div className="flex flex-1 flex-col gap-6">
@@ -148,7 +168,13 @@ export default async function VehicleDetailPage({
           <TripsTab trips={trips} revenueByTrip={revenueByTrip} />
         </TabsContent>
         <TabsContent value="fuel" className="mt-4">
-          <FuelTab transactions={fuelTransactions} metrics={fuelMetrics} />
+          <FuelTab
+            transactions={fuelTransactions}
+            metrics={fuelMetrics}
+            consumption={fuelConsumption}
+            anomaliesByTransactionId={fuelAnomaliesByTransactionId}
+            odometerProvenance={odometerProvenance}
+          />
         </TabsContent>
         <TabsContent value="expenses" className="mt-4">
           <ExpensesTab expenses={expenses} />

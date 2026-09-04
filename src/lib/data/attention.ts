@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { FleetBoardVehicle } from "@/lib/data/fleet";
 import { daysUntil, formatDueText } from "@/lib/days-until";
+import { detectFuelAnomalies } from "@/lib/domain/fuel-anomaly";
 import { formatGpsFreshness } from "@/lib/gps/status";
 import { VEHICLE_DOCUMENT_TYPE_LABEL } from "@/lib/i18n/labels";
 import type { Database } from "@/lib/supabase/database.types";
@@ -15,7 +16,12 @@ import type { Database } from "@/lib/supabase/database.types";
  * they're evidence for a human to act on. See product principle in
  * README: "GPS recorded speed above threshold", never "driver was speeding".
  */
-export type AttentionCategory = "GPS_OFFLINE" | "DOCUMENT_EXPIRING" | "MAINTENANCE_DUE";
+export type AttentionCategory =
+  | "GPS_OFFLINE"
+  | "DOCUMENT_EXPIRING"
+  | "MAINTENANCE_DUE"
+  | "EXPENSE_PENDING_REVIEW"
+  | "FUEL_REVIEW_RECOMMENDED";
 export type AttentionSeverity = "info" | "warning" | "critical";
 
 export interface AttentionItem {
@@ -110,6 +116,84 @@ export async function getAttentionItems(
       vehicleId: schedule.vehicle?.id ?? null,
       unitNumber: schedule.vehicle?.unit_number ?? null,
       description: `${schedule.title} for unit ${schedule.vehicle?.unit_number ?? "unknown"} ${formatDueText(days, "due")}`,
+    });
+  }
+
+  // Restrained on purpose: one aggregate item per signal, never one per
+  // transaction -- a busy week of fuel purchases or expense entries should
+  // not flood this list the way a per-row alert would.
+  const { data: pendingExpenses, error: pendingExpensesError } = await supabase
+    .from("expenses")
+    .select("id, created_at")
+    .eq("status", "active")
+    .eq("approval_status", "PENDING_REVIEW")
+    .order("created_at", { ascending: true });
+
+  if (pendingExpensesError) {
+    throw new Error(`Failed to load pending expenses: ${pendingExpensesError.message}`);
+  }
+
+  if (pendingExpenses && pendingExpenses.length > 0) {
+    const oldestDays = Math.abs(daysUntil(pendingExpenses[0].created_at, today));
+    items.push({
+      id: "expenses-pending-review",
+      category: "EXPENSE_PENDING_REVIEW",
+      kind: "fact",
+      severity: oldestDays >= 7 ? "critical" : "warning",
+      vehicleId: null,
+      unitNumber: null,
+      description: `${pendingExpenses.length} expense${pendingExpenses.length === 1 ? "" : "s"} pending review, oldest recorded ${oldestDays} day${oldestDays === 1 ? "" : "s"} ago.`,
+    });
+  }
+
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: recentFuel, error: recentFuelError } = await supabase
+    .from("fuel_transactions")
+    .select("id, vehicle_id, occurred_at, odometer_km, volume_liters, receipt_url")
+    .eq("status", "active")
+    .gte("occurred_at", sevenDaysAgo);
+
+  if (recentFuelError) {
+    throw new Error(`Failed to load recent fuel transactions: ${recentFuelError.message}`);
+  }
+
+  const fuelByVehicle = new Map<string, typeof recentFuel>();
+  for (const t of recentFuel ?? []) {
+    const list = fuelByVehicle.get(t.vehicle_id);
+    if (list) list.push(t);
+    else fuelByVehicle.set(t.vehicle_id, [t]);
+  }
+  let flaggedFuelCount = 0;
+  for (const vehicleTransactions of fuelByVehicle.values()) {
+    const anomalies = detectFuelAnomalies(
+      vehicleTransactions.map((t) => ({
+        id: t.id,
+        occurred_at: t.occurred_at,
+        odometer_km: t.odometer_km,
+        volume_liters: Number(t.volume_liters),
+        receipt_url: t.receipt_url,
+      })),
+    );
+    // Only the consumption/odometer-order flags -- missing receipt/odometer
+    // are routine data-entry gaps, not the kind of thing worth a Command
+    // Center signal.
+    const reviewWorthy = new Set(
+      anomalies
+        .filter((a) => a.kind === "consumption_above_baseline" || a.kind === "consumption_below_baseline" || a.kind === "odometer_inconsistency")
+        .map((a) => a.transactionId),
+    );
+    flaggedFuelCount += reviewWorthy.size;
+  }
+
+  if (flaggedFuelCount > 0) {
+    items.push({
+      id: "fuel-review-recommended",
+      category: "FUEL_REVIEW_RECOMMENDED",
+      kind: "calculation",
+      severity: "warning",
+      vehicleId: null,
+      unitNumber: null,
+      description: `${flaggedFuelCount} fuel transaction${flaggedFuelCount === 1 ? "" : "s"} in the past 7 days flagged for review against each vehicle's own baseline.`,
     });
   }
 

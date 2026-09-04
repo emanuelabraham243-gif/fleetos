@@ -18,18 +18,28 @@ export function FinancialSection({ summary }: { summary: TripFinancialSummary })
 
   return (
     <Card>
-      <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <MetricCard label="Revenue" value={format(summary.revenue)} hint="Recorded against this trip" />
-        <MetricCard
-          label="Fuel cost"
-          value={format(summary.fuelCostDuringTrip)}
-          hint="Recorded for this vehicle during the trip window"
-        />
-        <MetricCard
-          label="Other expenses"
-          value={format(summary.expensesDuringTrip)}
-          hint="Recorded for this vehicle during the trip window"
-        />
+      <CardContent className="flex flex-col gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <MetricCard label="Revenue" value={format(summary.revenue)} hint="Recorded against this trip" />
+          <MetricCard label="Fuel cost" value={format(summary.fuelCost)} hint="Fuel linked to this trip" />
+          <MetricCard
+            label="Other expenses"
+            value={format(summary.otherExpensesCost)}
+            hint="Expenses linked to this trip"
+          />
+          <MetricCard label="Total cost" value={format(summary.totalCost)} />
+        </div>
+
+        {summary.revenue === null ? (
+          <p className="text-muted-foreground border-t pt-3 text-sm">
+            Cost recorded: {summary.totalCost !== null ? formatCurrency(summary.totalCost, summary.currency) : "0"} /
+            Revenue: Not recorded / Profit: Not available
+          </p>
+        ) : (
+          <div className="border-t pt-3">
+            <MetricCard label="Current margin" value={format(summary.margin)} />
+          </div>
+        )}
       </CardContent>
     </Card>
   );

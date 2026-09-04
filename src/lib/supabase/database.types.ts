@@ -732,7 +732,11 @@ export type Database = {
       expenses: {
         Row: {
           amount: number
+          approval_status: Database["public"]["Enums"]["expense_approval_status"]
+          approved_at: string | null
+          approved_by: string | null
           category: Database["public"]["Enums"]["expense_category"]
+          correction_reason: string | null
           created_at: string
           created_by: string | null
           currency: string
@@ -741,15 +745,26 @@ export type Database = {
           id: string
           occurred_at: string
           organization_id: string
+          payment_method: Database["public"]["Enums"]["payment_method"] | null
           receipt_url: string | null
+          reference_number: string | null
+          rejection_reason: string | null
           status: Database["public"]["Enums"]["record_state"]
+          supersedes_id: string | null
+          trip_id: string | null
           updated_at: string
           vehicle_id: string | null
+          vendor_id: string | null
           vendor_name: string | null
+          void_reason: string | null
         }
         Insert: {
           amount: number
+          approval_status?: Database["public"]["Enums"]["expense_approval_status"]
+          approved_at?: string | null
+          approved_by?: string | null
           category?: Database["public"]["Enums"]["expense_category"]
+          correction_reason?: string | null
           created_at?: string
           created_by?: string | null
           currency?: string
@@ -758,15 +773,26 @@ export type Database = {
           id?: string
           occurred_at: string
           organization_id: string
+          payment_method?: Database["public"]["Enums"]["payment_method"] | null
           receipt_url?: string | null
+          reference_number?: string | null
+          rejection_reason?: string | null
           status?: Database["public"]["Enums"]["record_state"]
+          supersedes_id?: string | null
+          trip_id?: string | null
           updated_at?: string
           vehicle_id?: string | null
+          vendor_id?: string | null
           vendor_name?: string | null
+          void_reason?: string | null
         }
         Update: {
           amount?: number
+          approval_status?: Database["public"]["Enums"]["expense_approval_status"]
+          approved_at?: string | null
+          approved_by?: string | null
           category?: Database["public"]["Enums"]["expense_category"]
+          correction_reason?: string | null
           created_at?: string
           created_by?: string | null
           currency?: string
@@ -775,13 +801,27 @@ export type Database = {
           id?: string
           occurred_at?: string
           organization_id?: string
+          payment_method?: Database["public"]["Enums"]["payment_method"] | null
           receipt_url?: string | null
+          reference_number?: string | null
+          rejection_reason?: string | null
           status?: Database["public"]["Enums"]["record_state"]
+          supersedes_id?: string | null
+          trip_id?: string | null
           updated_at?: string
           vehicle_id?: string | null
+          vendor_id?: string | null
           vendor_name?: string | null
+          void_reason?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "expenses_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "expenses_created_by_fkey"
             columns: ["created_by"]
@@ -804,10 +844,31 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "expenses_supersedes_id_fkey"
+            columns: ["supersedes_id"]
+            isOneToOne: false
+            referencedRelation: "expenses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "expenses_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
             referencedColumns: ["id"]
           },
         ]
@@ -822,13 +883,18 @@ export type Database = {
           notes: string | null
           occurred_at: string
           odometer_km: number | null
+          odometer_override_reason: string | null
           organization_id: string
+          payment_method: Database["public"]["Enums"]["payment_method"] | null
           price_per_liter: number | null
           receipt_url: string | null
+          reference_number: string | null
           status: Database["public"]["Enums"]["record_state"]
           total_amount: number
+          trip_id: string | null
           updated_at: string
           vehicle_id: string
+          vendor_id: string | null
           vendor_name: string | null
           volume_liters: number
         }
@@ -841,13 +907,18 @@ export type Database = {
           notes?: string | null
           occurred_at: string
           odometer_km?: number | null
+          odometer_override_reason?: string | null
           organization_id: string
+          payment_method?: Database["public"]["Enums"]["payment_method"] | null
           price_per_liter?: number | null
           receipt_url?: string | null
+          reference_number?: string | null
           status?: Database["public"]["Enums"]["record_state"]
           total_amount: number
+          trip_id?: string | null
           updated_at?: string
           vehicle_id: string
+          vendor_id?: string | null
           vendor_name?: string | null
           volume_liters: number
         }
@@ -860,13 +931,18 @@ export type Database = {
           notes?: string | null
           occurred_at?: string
           odometer_km?: number | null
+          odometer_override_reason?: string | null
           organization_id?: string
+          payment_method?: Database["public"]["Enums"]["payment_method"] | null
           price_per_liter?: number | null
           receipt_url?: string | null
+          reference_number?: string | null
           status?: Database["public"]["Enums"]["record_state"]
           total_amount?: number
+          trip_id?: string | null
           updated_at?: string
           vehicle_id?: string
+          vendor_id?: string | null
           vendor_name?: string | null
           volume_liters?: number
         }
@@ -893,10 +969,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "fuel_transactions_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "fuel_transactions_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fuel_transactions_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
             referencedColumns: ["id"]
           },
         ]
@@ -2551,6 +2641,11 @@ export type Database = {
         | "statement"
         | "system"
         | "other"
+      expense_approval_status:
+        | "RECORDED"
+        | "PENDING_REVIEW"
+        | "APPROVED"
+        | "REJECTED"
       expense_category:
         | "maintenance"
         | "insurance"
@@ -2563,6 +2658,11 @@ export type Database = {
         | "parts"
         | "tires"
         | "driver_related"
+        | "loading_unloading"
+        | "accommodation"
+        | "meals"
+        | "repairs"
+        | "communication"
       fuel_type: "diesel" | "gasoline" | "electric" | "cng" | "other"
       gps_connection_status: "active" | "paused" | "error" | "disconnected"
       gps_integration_type:
@@ -2611,7 +2711,13 @@ export type Database = {
         | "manager"
         | "driver"
         | "viewer"
-      payment_method: "cash" | "card" | "bank_transfer" | "check" | "other"
+      payment_method:
+        | "cash"
+        | "card"
+        | "bank_transfer"
+        | "check"
+        | "other"
+        | "mobile_money"
       record_state:
         | "active"
         | "voided"
@@ -2648,6 +2754,7 @@ export type Database = {
         | "fuel_station"
         | "insurance"
         | "other"
+        | "tire_supplier"
       work_order_status: "open" | "in_progress" | "completed" | "cancelled"
     }
     CompositeTypes: {
@@ -2851,6 +2958,12 @@ export const Constants = {
         "system",
         "other",
       ],
+      expense_approval_status: [
+        "RECORDED",
+        "PENDING_REVIEW",
+        "APPROVED",
+        "REJECTED",
+      ],
       expense_category: [
         "maintenance",
         "insurance",
@@ -2863,6 +2976,11 @@ export const Constants = {
         "parts",
         "tires",
         "driver_related",
+        "loading_unloading",
+        "accommodation",
+        "meals",
+        "repairs",
+        "communication",
       ],
       fuel_type: ["diesel", "gasoline", "electric", "cng", "other"],
       gps_connection_status: ["active", "paused", "error", "disconnected"],
@@ -2905,7 +3023,14 @@ export const Constants = {
       ],
       movement_state: ["moving", "stationary", "idle", "unknown"],
       org_role: ["owner", "admin", "dispatcher", "manager", "driver", "viewer"],
-      payment_method: ["cash", "card", "bank_transfer", "check", "other"],
+      payment_method: [
+        "cash",
+        "card",
+        "bank_transfer",
+        "check",
+        "other",
+        "mobile_money",
+      ],
       record_state: ["active", "voided", "corrected", "superseded", "archived"],
       trip_status: [
         "DRAFT",
@@ -2940,6 +3065,7 @@ export const Constants = {
         "fuel_station",
         "insurance",
         "other",
+        "tire_supplier",
       ],
       work_order_status: ["open", "in_progress", "completed", "cancelled"],
     },

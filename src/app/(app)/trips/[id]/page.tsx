@@ -38,7 +38,7 @@ export default async function TripDetailPage({
   const [profile, stops, financials, timeline, vehicle, deliveries] = await Promise.all([
     getCurrentProfile(),
     getTripStops(supabase, trip.id),
-    getTripFinancialSummary(supabase, trip),
+    getTripFinancialSummary(supabase, trip.id),
     getTripTimeline(supabase, trip),
     getVehicleById(supabase, trip.vehicle_id),
     getDeliveriesByTripId(supabase, trip.id),

@@ -434,16 +434,105 @@ decision -- it never infers intent, fault, or a "score" from raw events.
   merge-and-sort pattern as `getVehicleHistory` (Phase 3) and
   `getTripTimeline` (Phase 4); no new event-log table.
 
+### Fuel + Expenses + Cost Control (Phase 6)
+
+The financial operations layer: fuel purchases, operating expenses, and
+enough honest cost data to eventually support profitability -- built on the
+same "evidence, not accusation" principle Phase 5 established for drivers,
+now applied to money. An anomaly is a fact about a deviation from a
+vehicle's own history ("31% above baseline"), never a conclusion about a
+person ("possible theft").
+
+- **Two orthogonal status columns, merged only at display time**
+  (`src/lib/domain/expense.ts`) -- `record_state` (`active`/`voided`/
+  `corrected`/`superseded`/`archived`, shared with `fuel_transactions`/
+  `revenues`/`payments` since Phase 1) still answers "is this row the
+  authoritative record"; a new `expense_approval_status` enum
+  (`RECORDED`/`PENDING_REVIEW`/`APPROVED`/`REJECTED`) answers "has a human
+  reviewed it" -- an expense-specific business concern the other three
+  tables have no use for. `computeExpenseDisplayStatus()` is the one place
+  that combines them into the single word (`VOIDED` wins over whatever
+  `approval_status` says) the `/expenses` table shows.
+- **Fuel and expenses gain a real trip link**
+  (`fuel_transactions.trip_id`, `expenses.trip_id`,
+  `supabase/migrations/20260905090000_fuel_expense_cost_control.sql`) --
+  replaces the Phase 4 `getTripFinancialSummary`'s time-window correlation
+  (fuel/expenses whose `occurred_at` fell inside a trip's window) with a
+  direct foreign key. A transaction with no `trip_id` renders "Trip:
+  Unassigned", never a guessed match. The same migration adds `vendor_id`
+  FKs (reusing the existing `vendors` table, now with a `tire_supplier`
+  category and a data layer at `src/lib/data/vendors.ts`), and
+  `fuel_transactions.odometer_override_reason` for the validation override
+  below.
+- **Consumption and anomaly detection are pure functions over already-
+  fetched rows, no query of their own**
+  (`src/lib/domain/fuel-consumption.ts`, `src/lib/domain/fuel-anomaly.ts`)
+  -- the same "pure combine" shape as `buildFleetBoard` (Phase 2) and
+  `driver-board.ts` (Phase 5). Distance is the spread between the first
+  and last odometer-tagged transaction; liters-consumed excludes the first
+  fill (it fueled the vehicle *to* the start of the measured interval, not
+  across it) -- a distinct convention from the pre-existing
+  `computeFuelMetrics.costPerKm` (all transactions' total cost over the
+  full spread), kept unchanged for backward compatibility with the
+  Vehicle Detail card that already shipped. An anomaly flag only compares a
+  transaction against the *average of its own vehicle's prior* segments,
+  and only once at least 2 prior segments exist -- never a fleet-wide
+  benchmark, never a judgment from a single data point.
+- **Odometer has two real sources, modeled transparently**
+  (`src/lib/domain/odometer-provenance.ts`, `getVehicleOdometerProvenance`
+  in `src/lib/data/fuel.ts`) -- `vehicles.odometer_km` (manual) and the
+  latest active `fuel_transactions.odometer_km` (fuel-receipt-based) are
+  the only two sources that actually exist in this schema; `gps` and
+  `maintenance` are typed as recognized sources for when that data exists,
+  never faked now. A new Record Fuel submission is validated against
+  whichever of the two is most recently recorded; a lower reading is
+  rejected unless the submitter gives a reason (stored on the row, covered
+  by the existing `audit_changes` trigger like every other write to this
+  table) -- the conflict is surfaced on the Vehicle Detail Fuel tab, never
+  silently resolved by picking one source over the other.
+- **`/finance/fuel` and `/finance/expenses` are real pages now**
+  (`src/app/(app)/finance/fuel/`, `src/app/(app)/finance/expenses/`) --
+  summary cards, a date-range filter (Today/This Week/This Month/Last
+  Month/Custom, computed against the Addis Ababa calendar via
+  `src/lib/domain/date-range.ts` since Ethiopia has no DST, a fixed +3
+  offset is correct year-round), client-side search/vehicle/driver/vendor
+  filters over that range, and the full column set the spec calls for.
+  Record Fuel / Add Expense are real Server Action-backed forms (never a
+  manually-entered total -- liters × price is computed server-side); void
+  (fuel and expenses) and approve/reject (expenses) are separate,
+  reason-required actions, never a silent edit or a hard delete.
+- **Trip Detail's financial summary stopped pretending to know profit it
+  doesn't have** (`src/lib/data/trip-finance.ts`,
+  `src/components/trips/detail/financial-section.tsx`) -- Fuel Cost/Other
+  Expenses/Total Cost are real now (via the trip_id FK above); when no
+  revenue is recorded, the card reads "Cost recorded: X ETB / Revenue: Not
+  recorded / Profit: Not available" instead of a margin computed against a
+  revenue of 0.
+- **Vehicle Detail's cost/km uses the same fuel-transaction-derived
+  distance as the Fuel tab** (`getVehicleFinancialSummary` in
+  `src/lib/data/vehicle-finance.ts`) -- operating cost (expenses + fuel +
+  maintenance) divided by that distance, `null`/"Insufficient data" when
+  fewer than two odometer readings exist, never divided by a guessed
+  distance.
+- **Command Center gets two restrained, aggregate signals, never one row
+  per transaction** (`src/lib/data/attention.ts`) -- a single "N expenses
+  pending review, oldest recorded N days ago" item, and a single "N fuel
+  transactions in the past 7 days flagged for review" item (only the
+  consumption/odometer-order flags count toward it; a missing receipt or
+  odometer is a routine data-entry gap, not a Command Center signal). A
+  busy week never floods this list the way a per-row alert would.
+
 ## What's deliberately not here
 
-No CRUD for Finance beyond Fuel/Expenses, Compliance, Intelligence, or
-Issues beyond a working Incidents-report link-out and the Disputes linkage
-(the standalone Disputes list/detail screens themselves are still
-placeholders -- disputes can be *raised* and responded to from a trip,
-delivery, or driver page, but there's no `/issues/disputes` management UI
-yet), plus the quick-action routes still deferred from Phase 2/3
-(`/finance/fuel/new`, `/finance/expenses/new`, `/issues/incidents/new`,
-`/maintenance/new` render placeholders). No non-mock GPS adapters, no
+No CRUD for Compliance, Intelligence, or Issues beyond a working
+Incidents-report link-out and the Disputes linkage (the standalone
+Disputes list/detail screens themselves are still placeholders --
+disputes can be *raised* and responded to from a trip, delivery, or driver
+page, but there's no `/issues/disputes` management UI yet), plus the
+quick-action routes still deferred from Phase 2/3 (`/issues/incidents/new`,
+`/maintenance/new` render placeholders -- `/finance/fuel/new` and
+`/finance/expenses/new` are real forms as of Phase 6). No non-mock GPS
+adapters, no
 Amharic/i18n UI (deliberately deferred, but the token layer is ready for it
 -- see [Language-neutral by design](#language-neutral-by-design)), no
 government/regulatory integrations, no driver-facing mobile app (see
@@ -592,6 +681,46 @@ environment; on a fresh project, run the migrations in
   base table, Phase 4's trip/delivery/vehicle columns, this phase's
   `driver_response`), but there is still no standalone place to browse or
   triage all disputes across the organization.
+- **GPS still goes stale without a sync** -- unchanged since Phase 2.
+
+## Known limitations (Phase 6)
+
+- **Expense corrections use void + re-add, not the dedicated `supersedes_id`
+  chain** -- the schema has `expenses.supersedes_id`/`correction_reason`
+  (added this phase, ready for use), but no UI action wires them up yet.
+  The spec's two sanctioned correction patterns are "correction or
+  void+replacement, never silent edit" -- void (with a reason) plus a fresh
+  Add Expense satisfies that today; a dedicated "Correct" action that
+  chains the two rows explicitly is additive, not a gap in the audit trail.
+- **Payments/cash-flow integration was deliberately not built** -- the
+  existing `payments` table is accounts-receivable-shaped (`client_id`/
+  `invoice_id`), while expenses are accounts-payable; forcing a connection
+  would have misrepresented the data or duplicated the Payments module, so
+  `expenses.payment_method`/`reference_number` stayed purely descriptive
+  fields with no FK into `payments`.
+- **Vehicle Detail's Fuel/Expenses tabs show full history, not the same
+  date-range filter `/fuel` and `/expenses` have** -- consistent with every
+  other Vehicle Detail tab (Trips, Maintenance, Documents, ...), none of
+  which are date-filtered either; adding it would mean plumbing
+  `searchParams` through a page that already has 9 tabs sharing one query
+  set, which this phase didn't do.
+- **Fuel anomaly baselines are computed only over the currently-viewed
+  date range on `/fuel`** (not full vehicle history) -- the Vehicle Detail
+  Fuel tab's own anomaly badges use the vehicle's complete history, so
+  they're authoritative; the Command Center signal and `/fuel` page's
+  badges use whatever range is selected, which can miss or double-count
+  baseline context right at a range boundary. Low-impact (both still only
+  ever say "Review Recommended"), but worth knowing.
+- **No odometer conflict exists in the seeded demo data** -- the domain
+  logic (`buildOdometerProvenance`'s `hasConflict`) was verified directly
+  with a script exercising both the conflict and no-conflict cases (see
+  Verification below), and the Vehicle Detail Fuel tab's conflict banner
+  was code-reviewed, but no seeded vehicle currently has two odometer
+  sources that actually disagree, so the banner itself has never rendered
+  against real seed data.
+- **Role restrictions are still app-layer only, not yet RLS** -- same
+  constraint as every prior phase, now also covering `fuel_transactions`/
+  `expenses`/`vendors`.
 - **GPS still goes stale without a sync** -- unchanged since Phase 2.
 
 ## Verification performed
@@ -780,3 +909,62 @@ environment; on a fresh project, run the migrations in
   signed-URL "View" link end-to-end. All of it was instead verified at the
   data/query layer as shown above, plus a full production build succeeding
   with every new route present.
+
+**Phase 6 (additional):**
+- `npm run build`, `npx tsc --noEmit -p .`, `npx eslint .` -- all clean
+  across the whole project, not just the new files.
+- All 3 migrations (`fuel_expense_cost_control`, `expense_approval_
+  workflow`, `fuel_transaction_payment_fields`) applied to and verified
+  against the live database; regenerated TypeScript types confirmed to
+  carry every new column/enum via direct grep before use.
+- The 5 new pure domain functions (`computeFuelConsumption`,
+  `detectFuelAnomalies`, `computeFuelSummary`, `computeExpenseDisplayStatus`
+  /`canReviewExpense`, `validateOdometerReading`/`buildOdometerProvenance`,
+  `resolveDateRange`) were exercised directly with a script
+  (`npx tsx` against the real seeded numbers), not just typechecked:
+  - A 3-segment fuel history for one vehicle correctly flagged the 3rd
+    transaction `consumption_above_baseline` at "37% above baseline" (the
+    2 prior segments' average vs. the 3rd), and correctly did *not* flag
+    the 1st/2nd (fewer than 2 prior segments to compare against).
+  - `computeFuelConsumption`/`computeFuelSummary` both confirmed to return
+    `null` (never a fabricated 0) for zero/one-reading and empty-set
+    inputs respectively, while still returning true `0` for a legitimate
+    empty-set *sum* (total cost of zero transactions is genuinely 0, not
+    unknown) -- the exact "never a misleading zero" distinction the spec
+    draws.
+  - `resolveDateRange("this_month")`/`"last_month"` produced UTC instants
+    that correspond to Sept 1 / Aug 1 00:00 in Addis Ababa (UTC+3), not
+    UTC midnight -- confirmed by hand against the +3 offset.
+  - `validateOdometerReading` confirmed rejecting a lower reading without
+    a reason, accepting the same reading with one, and accepting any
+    higher reading.
+  - `buildOdometerProvenance` confirmed both the conflict and no-conflict
+    cases (see [Known limitations](#known-limitations-phase-6) for why
+    seed data only exercises the no-conflict path).
+- Seed data (5 vendors, 6 new fuel transactions, 5 new expenses spanning 5
+  categories, one `PENDING_REVIEW` expense) applied directly and verified
+  with SQL mirroring the app's own query shapes: the September date-range
+  filter returns exactly 6 of the (now 11 total) fuel transactions and 6
+  of the (now 8 total) expenses; `TR-001`/`TR-006`'s trip-linked fuel+
+  expense costs sum to exactly what direct SQL against `fuel_transactions`/
+  `expenses` filtered by `trip_id` returns, confirming `getTripFinancial
+  Summary`'s FK-based rewrite (replacing Phase 4's time-window
+  correlation) matches; the Command Center's pending-review count (1) and
+  the storage bucket `attachments` being `public: false` (receipts stay
+  private) were both confirmed via direct query.
+- Re-ran the security advisor after all 3 migrations: no new findings
+  beyond the same pre-existing intentional ones from every prior phase.
+- **Not verified**: an authenticated browser session clicking through
+  Record Fuel, Add Expense, or the approve/reject/void dialogs end-to-end
+  -- same sandbox egress constraint as every prior phase (confirmed fresh
+  this session: the proxy status endpoint logs a `403`/`connect_rejected`
+  on `CONNECT` to this project's `supabase.co` host from the dev server's
+  own outbound fetch, so the Auth API call a real sign-in makes cannot be
+  exercised from here). What *was* confirmed live: the dev server serves
+  all 6 new/changed routes (`/finance/fuel`, `/finance/fuel/new`,
+  `/finance/expenses`, `/finance/expenses/new`, a vehicle detail page, a
+  trip detail page) with no console errors and no unhandled-exception
+  overlays for the logged-out redirect path, via a headless-Chromium
+  smoke test. Everything past the login wall was instead verified at the
+  domain/data/query layer as shown above, plus the full production build
+  succeeding with every new route present.

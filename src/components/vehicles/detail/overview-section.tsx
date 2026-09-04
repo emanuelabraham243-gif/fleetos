@@ -141,6 +141,14 @@ export function OverviewSection({
                 currency={financials.currency}
                 emphasize
               />
+              <span className="text-muted-foreground">Cost / km</span>
+              <span>
+                {financials.costPerKm !== null ? (
+                  formatCurrency(financials.costPerKm, financials.currency)
+                ) : (
+                  <span className="text-muted-foreground italic">Insufficient data</span>
+                )}
+              </span>
             </>
           ) : (
             <span className="text-muted-foreground col-span-2 py-4 text-center italic">

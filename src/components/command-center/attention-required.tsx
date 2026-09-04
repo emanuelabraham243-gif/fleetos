@@ -1,4 +1,4 @@
-import { CalendarClock, ShieldCheck, Wrench } from "lucide-react";
+import { CalendarClock, Fuel, Receipt, ShieldCheck, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -10,12 +10,16 @@ const CATEGORY_ICON: Record<AttentionCategory, LucideIcon> = {
   GPS_OFFLINE: Wrench,
   DOCUMENT_EXPIRING: CalendarClock,
   MAINTENANCE_DUE: ShieldCheck,
+  EXPENSE_PENDING_REVIEW: Receipt,
+  FUEL_REVIEW_RECOMMENDED: Fuel,
 };
 
 const CATEGORY_LABEL: Record<AttentionCategory, string> = {
   GPS_OFFLINE: "GPS",
   DOCUMENT_EXPIRING: "Document",
   MAINTENANCE_DUE: "Maintenance",
+  EXPENSE_PENDING_REVIEW: "Expenses",
+  FUEL_REVIEW_RECOMMENDED: "Fuel",
 };
 
 const severityOrder: Record<AttentionItem["severity"], number> = {

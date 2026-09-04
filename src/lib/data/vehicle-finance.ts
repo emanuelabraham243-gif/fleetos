@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { computeFuelConsumption } from "@/lib/domain/fuel-consumption";
 import type { Database } from "@/lib/supabase/database.types";
 
 export interface VehicleFinancialSummary {
@@ -12,6 +13,8 @@ export interface VehicleFinancialSummary {
   maintenanceCost: number | null;
   operatingCost: number | null;
   profit: number | null;
+  /** operatingCost / distance covered by this vehicle's fuel-transaction odometer readings. Null unless both are known -- never divided by a guessed distance. */
+  costPerKm: number | null;
   currency: string;
 }
 
@@ -44,7 +47,7 @@ export async function getVehicleFinancialSummary(
     supabase.from("expenses").select("amount, currency").eq("status", "active").eq("vehicle_id", vehicleId),
     supabase
       .from("fuel_transactions")
-      .select("total_amount, currency")
+      .select("total_amount, currency, occurred_at, odometer_km")
       .eq("status", "active")
       .eq("vehicle_id", vehicleId),
     supabase
@@ -85,6 +88,16 @@ export async function getVehicleFinancialSummary(
   const profit =
     totalRevenue !== null && operatingCost !== null ? totalRevenue - operatingCost : null;
 
+  const { distanceKm } = computeFuelConsumption(
+    (fuelRes.data ?? []).map((row) => ({
+      occurred_at: row.occurred_at,
+      odometer_km: row.odometer_km,
+      volume_liters: 0,
+    })),
+  );
+  const costPerKm =
+    operatingCost !== null && distanceKm !== null && distanceKm > 0 ? operatingCost / distanceKm : null;
+
   const round = (value: number | null) => (value === null ? null : Math.round(value * 100) / 100);
 
   return {
@@ -94,6 +107,7 @@ export async function getVehicleFinancialSummary(
     maintenanceCost: round(maintenanceCost),
     operatingCost: round(operatingCost),
     profit: round(profit),
+    costPerKm: costPerKm !== null ? Math.round(costPerKm * 100) / 100 : null,
     currency,
   };
 }
