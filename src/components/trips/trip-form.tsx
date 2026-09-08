@@ -146,9 +146,17 @@ export function TripForm({
       </div>
 
       {state?.error ? (
-        <p role="alert" className="text-destructive text-sm">
-          {state.error}
-        </p>
+        <div className="flex flex-col gap-2">
+          <p role="alert" className="text-destructive text-sm">
+            {state.error}
+          </p>
+          {state.error.startsWith("Maintenance conflict:") ? (
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="acknowledge_maintenance_conflict" />
+              Acknowledge and continue anyway
+            </label>
+          ) : null}
+        </div>
       ) : null}
 
       <div>

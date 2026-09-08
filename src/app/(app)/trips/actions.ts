@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
+import { getVehicleDispatchWarning } from "@/lib/data/maintenance";
 import { findTripConflicts } from "@/lib/data/trips";
 import { getCurrentProfile } from "@/lib/data/profile";
 import { canManageFleet } from "@/lib/domain/permissions";
@@ -76,6 +77,25 @@ export async function createTrip(
   }
 
   const supabase = await createClient();
+
+  const acknowledgeMaintenanceConflict = formData.get("acknowledge_maintenance_conflict") === "on";
+  if (!acknowledgeMaintenanceConflict) {
+    const dispatchWarning = await getVehicleDispatchWarning(supabase, vehicleId);
+    if (dispatchWarning) {
+      const parts: string[] = [];
+      if (dispatchWarning.vehicleStatus !== "active") {
+        parts.push(`this vehicle's status is ${dispatchWarning.vehicleStatus.replace("_", " ")}`);
+      }
+      if (dispatchWarning.openCriticalIssues.length > 0) {
+        parts.push(
+          `it has ${dispatchWarning.openCriticalIssues.length} open critical issue${dispatchWarning.openCriticalIssues.length === 1 ? "" : "s"} (${dispatchWarning.openCriticalIssues.map((i) => i.title).join(", ")})`,
+        );
+      }
+      return {
+        error: `Maintenance conflict: ${parts.join(" and ")}. Check "acknowledge and continue" to dispatch anyway.`,
+      };
+    }
+  }
 
   const conflicts = await findTripConflicts(supabase, {
     vehicleId,

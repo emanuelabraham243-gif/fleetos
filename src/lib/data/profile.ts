@@ -36,3 +36,19 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
 
   return data;
 }
+
+/** Every active member of the caller's organization -- for internal-assignee pickers (e.g. Work Order technician). */
+export async function getOrgMembers(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<Pick<Database["public"]["Tables"]["profiles"]["Row"], "id" | "full_name">[]> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, full_name")
+    .is("deactivated_at", null)
+    .order("full_name", { ascending: true });
+
+  if (error) {
+    throw new Error(`Failed to load organization members: ${error.message}`);
+  }
+  return data;
+}

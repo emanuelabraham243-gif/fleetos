@@ -19,19 +19,24 @@ export function ExpenseForm({
   drivers,
   trips,
   vendors,
+  defaultVehicleId,
+  defaultWorkOrderId,
 }: {
   action: (state: FormState, formData: FormData) => Promise<FormState>;
   vehicles: { id: string; unitNumber: string }[];
   drivers: { id: string; fullName: string }[];
   trips: { id: string; tripNumber: string; vehicleId: string }[];
   vendors: { id: string; name: string }[];
+  defaultVehicleId?: string;
+  defaultWorkOrderId?: string;
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(action, null);
-  const [vehicleId, setVehicleId] = useState("");
+  const [vehicleId, setVehicleId] = useState(defaultVehicleId ?? "");
   const tripsForVehicle = vehicleId ? trips.filter((t) => t.vehicleId === vehicleId) : trips;
 
   return (
     <form action={formAction} className="flex max-w-2xl flex-col gap-6">
+      {defaultWorkOrderId ? <input type="hidden" name="work_order_id" value={defaultWorkOrderId} /> : null}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
           <Label htmlFor="occurred_at">Date *</Label>

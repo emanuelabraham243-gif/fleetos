@@ -12,7 +12,11 @@ import { createClient } from "@/lib/supabase/server";
 
 import { createExpense } from "../actions";
 
-export default async function AddExpensePage() {
+export default async function AddExpensePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ vehicle_id?: string; work_order_id?: string }>;
+}) {
   const profile = await getCurrentProfile();
   if (!profile || !canManageFleet(profile.role)) {
     return (
@@ -24,6 +28,7 @@ export default async function AddExpensePage() {
     );
   }
 
+  const params = await searchParams;
   const supabase = await createClient();
   const [vehicles, drivers, trips, vendors] = await Promise.all([
     getVehicles(supabase),
@@ -46,6 +51,8 @@ export default async function AddExpensePage() {
         drivers={drivers.map((d) => ({ id: d.id, fullName: d.full_name }))}
         trips={trips.map((t) => ({ id: t.id, tripNumber: t.trip_number, vehicleId: t.vehicle_id }))}
         vendors={vendors.map((v) => ({ id: v.id, name: v.name }))}
+        defaultVehicleId={params.vehicle_id}
+        defaultWorkOrderId={params.work_order_id}
       />
     </div>
   );

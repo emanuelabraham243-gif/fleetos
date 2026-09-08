@@ -8,6 +8,7 @@ import { ExpensesTab } from "@/components/vehicles/detail/expenses-tab";
 import { FuelTab } from "@/components/vehicles/detail/fuel-tab";
 import { HistoryTab } from "@/components/vehicles/detail/history-tab";
 import { IncidentsTab } from "@/components/vehicles/detail/incidents-tab";
+import { InspectionsTab } from "@/components/vehicles/detail/inspections-tab";
 import { LiveTrackingSection } from "@/components/vehicles/detail/live-tracking-section";
 import { MaintenanceTab } from "@/components/vehicles/detail/maintenance-tab";
 import { OverviewSection } from "@/components/vehicles/detail/overview-section";
@@ -21,6 +22,7 @@ import { computeFuelConsumption } from "@/lib/domain/fuel-consumption";
 import { detectFuelAnomalies } from "@/lib/domain/fuel-anomaly";
 import { getRecentGpsEvents } from "@/lib/data/gps-events";
 import { getVehicleIncidents } from "@/lib/data/incidents";
+import { getInspectionsList, getIssuesCreatedCountByInspection } from "@/lib/data/inspections";
 import { getVehicleMaintenance } from "@/lib/data/maintenance";
 import { getCurrentProfile } from "@/lib/data/profile";
 import { getRevenueByTripIds } from "@/lib/data/revenue";
@@ -78,6 +80,11 @@ export default async function VehicleDetailPage({
 
   const revenueByTrip = await getRevenueByTripIds(supabase, trips.map((t) => t.id));
   const odometerProvenance = await getVehicleOdometerProvenance(supabase, id);
+  const vehicleInspections = await getInspectionsList(supabase, { vehicleId: id });
+  const issuesCreatedByInspection = await getIssuesCreatedCountByInspection(
+    supabase,
+    vehicleInspections.map((i) => i.id),
+  );
 
   const activeTrip = trips.find((t) => isActiveTripStatus(t.status)) ?? null;
   const currentAssignment = assignmentHistory.find((a) => !a.unassigned_at) ?? null;
@@ -141,6 +148,7 @@ export default async function VehicleDetailPage({
           <TabsTrigger value="fuel">Fuel</TabsTrigger>
           <TabsTrigger value="expenses">Expenses</TabsTrigger>
           <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
+          <TabsTrigger value="inspections">Inspections</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="incidents">Incidents</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
@@ -180,7 +188,13 @@ export default async function VehicleDetailPage({
           <ExpensesTab expenses={expenses} />
         </TabsContent>
         <TabsContent value="maintenance" className="mt-4">
-          <MaintenanceTab maintenance={maintenance} />
+          <MaintenanceTab maintenance={maintenance} currentOdometerKm={odometerProvenance.latest?.odometerKm ?? null} />
+        </TabsContent>
+        <TabsContent value="inspections" className="mt-4">
+          <InspectionsTab
+            inspections={vehicleInspections}
+            issuesCreatedByInspection={Object.fromEntries(issuesCreatedByInspection)}
+          />
         </TabsContent>
         <TabsContent value="documents" className="mt-4">
           <DocumentsTab documents={documents} />

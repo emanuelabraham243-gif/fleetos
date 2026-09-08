@@ -21,7 +21,11 @@ export type AttentionCategory =
   | "DOCUMENT_EXPIRING"
   | "MAINTENANCE_DUE"
   | "EXPENSE_PENDING_REVIEW"
-  | "FUEL_REVIEW_RECOMMENDED";
+  | "FUEL_REVIEW_RECOMMENDED"
+  | "MAINTENANCE_ISSUE_CRITICAL"
+  | "WORK_ORDER_AWAITING_PARTS"
+  | "VEHICLE_IN_MAINTENANCE"
+  | "INSPECTION_FAILED";
 export type AttentionSeverity = "info" | "warning" | "critical";
 
 export interface AttentionItem {
@@ -194,6 +198,97 @@ export async function getAttentionItems(
       vehicleId: null,
       unitNumber: null,
       description: `${flaggedFuelCount} fuel transaction${flaggedFuelCount === 1 ? "" : "s"} in the past 7 days flagged for review against each vehicle's own baseline.`,
+    });
+  }
+
+  const { data: criticalIssues, error: criticalIssuesError } = await supabase
+    .from("maintenance_issues")
+    .select("id, title, vehicle:vehicles(id, unit_number)")
+    .eq("severity", "critical")
+    .not("status", "in", "(RESOLVED,CLOSED,DISMISSED)")
+    .order("reported_at", { ascending: true });
+
+  if (criticalIssuesError) {
+    throw new Error(`Failed to load critical maintenance issues: ${criticalIssuesError.message}`);
+  }
+
+  for (const issue of criticalIssues ?? []) {
+    items.push({
+      id: `maintenance-issue-${issue.id}`,
+      category: "MAINTENANCE_ISSUE_CRITICAL",
+      kind: "fact",
+      severity: "critical",
+      vehicleId: issue.vehicle?.id ?? null,
+      unitNumber: issue.vehicle?.unit_number ?? null,
+      description: `Critical issue reported on unit ${issue.vehicle?.unit_number ?? "unknown"}: ${issue.title}`,
+    });
+  }
+
+  const { data: awaitingPartsOrders, error: awaitingPartsError } = await supabase
+    .from("work_orders")
+    .select("id, title, vehicle:vehicles(id, unit_number)")
+    .eq("status", "AWAITING_PARTS")
+    .order("opened_at", { ascending: true });
+
+  if (awaitingPartsError) {
+    throw new Error(`Failed to load work orders awaiting parts: ${awaitingPartsError.message}`);
+  }
+
+  for (const wo of awaitingPartsOrders ?? []) {
+    items.push({
+      id: `work-order-parts-${wo.id}`,
+      category: "WORK_ORDER_AWAITING_PARTS",
+      kind: "fact",
+      severity: "warning",
+      vehicleId: wo.vehicle?.id ?? null,
+      unitNumber: wo.vehicle?.unit_number ?? null,
+      description: `Work order "${wo.title}" for unit ${wo.vehicle?.unit_number ?? "unknown"} is awaiting parts.`,
+    });
+  }
+
+  // Aggregate, not per-vehicle -- mirrors the pending-expenses signal: a fleet
+  // status roll-up, not an alert per vehicle.
+  const { count: inMaintenanceCount, error: inMaintenanceError } = await supabase
+    .from("vehicles")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "maintenance");
+
+  if (inMaintenanceError) {
+    throw new Error(`Failed to load vehicles in maintenance: ${inMaintenanceError.message}`);
+  }
+
+  if (inMaintenanceCount && inMaintenanceCount > 0) {
+    items.push({
+      id: "vehicles-in-maintenance",
+      category: "VEHICLE_IN_MAINTENANCE",
+      kind: "fact",
+      severity: "info",
+      vehicleId: null,
+      unitNumber: null,
+      description: `${inMaintenanceCount} vehicle${inMaintenanceCount === 1 ? "" : "s"} currently out of service for maintenance.`,
+    });
+  }
+
+  const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+  const { count: failedInspectionCount, error: failedInspectionError } = await supabase
+    .from("inspections")
+    .select("id", { count: "exact", head: true })
+    .eq("overall_result", "FAILED")
+    .gte("performed_at", fourteenDaysAgo);
+
+  if (failedInspectionError) {
+    throw new Error(`Failed to load failed inspections: ${failedInspectionError.message}`);
+  }
+
+  if (failedInspectionCount && failedInspectionCount > 0) {
+    items.push({
+      id: "inspections-failed",
+      category: "INSPECTION_FAILED",
+      kind: "fact",
+      severity: "warning",
+      vehicleId: null,
+      unitNumber: null,
+      description: `${failedInspectionCount} inspection${failedInspectionCount === 1 ? "" : "s"} failed in the past 14 days.`,
     });
   }
 

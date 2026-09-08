@@ -192,3 +192,102 @@ export const INCIDENT_STATUS_LABEL: Record<IncidentStatus, string> = {
   resolved: "Resolved",
   closed: "Closed",
 };
+
+type MaintenanceIssueStatus = Database["public"]["Enums"]["maintenance_issue_status"];
+
+export const MAINTENANCE_ISSUE_STATUS_LABEL: Record<MaintenanceIssueStatus, string> = {
+  REPORTED: "Reported",
+  ACKNOWLEDGED: "Acknowledged",
+  UNDER_DIAGNOSIS: "Under Diagnosis",
+  WORK_ORDER_CREATED: "Work Order Created",
+  RESOLVED: "Resolved",
+  CLOSED: "Closed",
+  DISMISSED: "Dismissed",
+};
+
+type MaintenanceIssueType = Database["public"]["Enums"]["maintenance_issue_type"];
+
+export const MAINTENANCE_ISSUE_TYPE_LABEL: Record<MaintenanceIssueType, string> = {
+  engine: "Engine",
+  transmission: "Transmission",
+  brakes: "Brakes",
+  tires: "Tires",
+  electrical: "Electrical",
+  cooling: "Cooling",
+  suspension: "Suspension",
+  body: "Body",
+  gps: "GPS",
+  fuel_system: "Fuel System",
+  other: "Other",
+};
+
+type MaintenanceIssueSeverity = Database["public"]["Enums"]["maintenance_issue_severity"];
+
+export const MAINTENANCE_ISSUE_SEVERITY_LABEL: Record<MaintenanceIssueSeverity, string> = {
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  critical: "Critical",
+};
+
+type WorkOrderStatus = Database["public"]["Enums"]["work_order_status"];
+
+export const WORK_ORDER_STATUS_LABEL: Record<WorkOrderStatus, string> = {
+  DRAFT: "Draft",
+  APPROVED: "Approved",
+  ASSIGNED: "Assigned",
+  DIAGNOSIS: "Diagnosis",
+  AWAITING_PARTS: "Awaiting Parts",
+  IN_REPAIR: "In Repair",
+  INSPECTION: "Inspection",
+  COMPLETED: "Completed",
+  CANCELLED: "Cancelled",
+};
+
+type WorkOrderPriority = Database["public"]["Enums"]["work_order_priority"];
+
+export const WORK_ORDER_PRIORITY_LABEL: Record<WorkOrderPriority, string> = {
+  LOW: "Low",
+  NORMAL: "Normal",
+  HIGH: "High",
+  CRITICAL: "Critical",
+};
+
+type MaintenanceType = Database["public"]["Enums"]["maintenance_type"];
+
+export const MAINTENANCE_TYPE_LABEL: Record<MaintenanceType, string> = {
+  PREVENTIVE: "Preventive",
+  CORRECTIVE: "Corrective",
+  INSPECTION: "Inspection",
+  EMERGENCY: "Emergency",
+};
+
+type InspectionTypeEnum = Database["public"]["Enums"]["inspection_type"];
+
+export const INSPECTION_TYPE_LABEL: Record<InspectionTypeEnum, string> = {
+  pre_trip: "Pre-Trip",
+  post_trip: "Post-Trip",
+  routine: "Routine",
+  maintenance: "Maintenance",
+  safety: "Safety",
+  damage: "Damage",
+  return_to_service: "Return-to-Service",
+};
+
+type InspectionOverallResult = Database["public"]["Enums"]["inspection_overall_result"];
+
+export const INSPECTION_OVERALL_RESULT_LABEL: Record<InspectionOverallResult, string> = {
+  PASSED: "Passed",
+  FAILED: "Failed",
+  PARTIAL: "Partial",
+  UNKNOWN: "Unknown",
+};
+
+type InspectionItemResult = Database["public"]["Enums"]["inspection_item_result"];
+
+export const INSPECTION_ITEM_RESULT_LABEL: Record<InspectionItemResult, string> = {
+  PASS: "Pass",
+  FAIL: "Fail",
+  NOT_APPLICABLE: "N/A",
+  UNKNOWN: "Unknown",
+};

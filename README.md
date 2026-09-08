@@ -522,6 +522,99 @@ person ("possible theft").
   odometer is a routine data-entry gap, not a Command Center signal). A
   busy week never floods this list the way a per-row alert would.
 
+### Maintenance + Inspections (Phase 7)
+
+Vehicle upkeep: what's due, what's broken, who's fixing it, and what it
+cost -- built without assuming every vehicle follows the same service
+schedule. A schedule can be time-based, mileage-based, or both; a due
+calculation that needs mileage it doesn't have honestly says "Mileage
+status: UNKNOWN" rather than guessing.
+
+- **Schedules never fabricate a rule type or a due status**
+  (`src/lib/domain/maintenance-schedule.ts`) -- `deriveScheduleRuleType`
+  reads which interval fields are actually set (`interval_km`/
+  `interval_days`, both/either/neither) rather than assuming; `next_due_at`/
+  `next_due_odometer_km` are always server-computed from the last-service
+  facts and interval, never accepted as raw form input (mirrored identically
+  in `createMaintenanceSchedule` and `completeWorkOrder`'s schedule-rollover
+  step, so the two code paths can't compute "next due" differently).
+  `computeMaintenanceDue` takes the worse of the two dimensions under a
+  combined rule, and leaves the mileage half `UNKNOWN` (never a fabricated
+  number) whenever no verified current odometer reading exists -- the exact
+  "never fabricate" principle Phase 6 established for fuel, now applied to
+  service due-dates.
+- **Issues and work orders are separate concerns with their own state
+  machines** (`src/lib/domain/maintenance-issue.ts`,
+  `src/lib/domain/work-order.ts`,
+  `supabase/migrations/20260905100000_maintenance_issue_work_order_
+  workflow.sql`) -- a `maintenance_issues` row is an *observation*
+  (`REPORTED` -> `ACKNOWLEDGED`/`DISMISSED` -> ... -> `RESOLVED`/`CLOSED`),
+  never a diagnosis; a `work_orders` row is the *repair* actually being
+  done, with its own 9-state lifecycle (`DRAFT` through `COMPLETED`/
+  `CANCELLED`) and an explicit `maintenance_type` (`PREVENTIVE`/
+  `CORRECTIVE`) so a scheduled service and a driver-reported repair are
+  never conflated. Creating a work order from an issue is the one place
+  `WORK_ORDER_CREATED` gets set; completing a work order is the one place
+  `RESOLVED` gets set -- neither status is ever picked from a free dropdown.
+- **Parts and labor cost roll up into `total_cost` only at completion, never
+  guessed mid-repair** (`src/app/(app)/maintenance/work-orders/actions.ts`'s
+  `completeWorkOrder`, `src/lib/domain/work-order.ts`'s
+  `computeWorkOrderCostBreakdown`) -- `maintenance_parts.total_cost` is a
+  DB-generated column (`quantity * unit_cost`, enforced by Postgres, not
+  just convention); `maintenance_labor.total_cost` is computed from
+  hours×rate or a flat fee, never both. `completeWorkOrder` sums parts +
+  labor + any linked `expenses.work_order_id` rows into the one
+  `work_orders.total_cost` a completed order shows -- an in-progress order
+  correctly has `total_cost: null`, not a running guess.
+- **Vehicle status changes are opt-in, never automatic**
+  (`transitionWorkOrderStatus`, `completeWorkOrder`,
+  `maybeReturnVehicleToActive`) -- moving a work order to `IN_REPAIR` only
+  sets the vehicle to `maintenance` if the "update vehicle status" checkbox
+  (default checked) was submitted alongside it; returning it to `active` on
+  completion or cancellation goes through the same checkbox *and* refuses to
+  fire while any other open work order remains on that vehicle. A status
+  transition and a fleet-availability change are deliberately two separate
+  facts, never one silent side effect of the other.
+- **Dispatch respects open maintenance work, but only with an explicit
+  override** (`getVehicleDispatchWarning` in `src/lib/data/maintenance.ts`,
+  `src/app/(app)/trips/actions.ts`'s `createTrip`) -- assigning a trip to a
+  vehicle with an open (non-`COMPLETED`/`CANCELLED`) work order is blocked
+  with a named error unless the dispatcher checks
+  `acknowledge_maintenance_conflict`, a new pattern (no `force`-style
+  override existed in this file before) built to match the one Phase 5
+  already established for driver conflicts, not copied blindly from it.
+- **Inspections derive their own result, never accept one independently**
+  (`src/lib/domain/inspection.ts`'s `deriveOverallResult`,
+  `supabase/migrations/20260905100300_inspection_items_and_overhaul.sql`)
+  -- `overall_result` (`PASSED`/`PARTIAL`/`FAILED`/`UNKNOWN`) is always
+  computed from the submitted `inspection_items` checklist (a single `FAIL`
+  makes it at best `PARTIAL`, never `PASSED`), so it can't drift from what
+  the items actually say. Seven inspection types (`pre_trip` through
+  `return_to_service`) each get their own default checklist template
+  (`DEFAULT_CHECKLISTS`, application-level -- the spec allows this to move
+  to a configurable DB table later, not required now); a failed item
+  converts into a linked `maintenance_issues` row on demand
+  (`createIssueFromInspectionItem`), writing back `inspection_items.
+  created_issue_id` so the two stay traceable to each other without
+  duplicating the observation.
+- **Vehicle Detail's Maintenance tab was rebuilt, not patched** around
+  Current Status/Open Issues/Open Work Orders/Maintenance History, and a
+  new Inspections tab was added -- both real subsystem data (schedules,
+  issues, work orders, inspections), no placeholders.
+- **Command Center gets four more restrained, aggregate-only signals**
+  (`src/lib/data/attention.ts`) -- one item per critical open issue, one
+  per work order `AWAITING_PARTS` (both bounded and individually
+  actionable, same granularity as the existing near-due-schedule signal),
+  plus two true aggregates (a vehicle-in-maintenance count, a 14-day
+  failed-inspection count) -- never a per-row flood.
+- **A genuinely missing relationship was closed, not worked around**
+  (`work_orders.maintenance_schedule_id`,
+  `supabase/migrations/20260905100500_work_order_completion_fields.sql`)
+  -- completing a work order needs to know *which* schedule it fulfills in
+  order to roll that schedule's last-service facts forward; the schema had
+  no such link before this phase, so a real FK was added rather than
+  guessing or skipping the requirement.
+
 ## What's deliberately not here
 
 No CRUD for Compliance, Intelligence, or Issues beyond a working
@@ -529,10 +622,10 @@ Incidents-report link-out and the Disputes linkage (the standalone
 Disputes list/detail screens themselves are still placeholders --
 disputes can be *raised* and responded to from a trip, delivery, or driver
 page, but there's no `/issues/disputes` management UI yet), plus the
-quick-action routes still deferred from Phase 2/3 (`/issues/incidents/new`,
-`/maintenance/new` render placeholders -- `/finance/fuel/new` and
-`/finance/expenses/new` are real forms as of Phase 6). No non-mock GPS
-adapters, no
+quick-action routes still deferred from Phase 2/3 (`/issues/incidents/new`
+still renders a placeholder -- `/finance/fuel/new`/`/finance/expenses/new`
+are real forms as of Phase 6, and `/maintenance/new` is a real Schedule
+Maintenance form as of Phase 7). No non-mock GPS adapters, no
 Amharic/i18n UI (deliberately deferred, but the token layer is ready for it
 -- see [Language-neutral by design](#language-neutral-by-design)), no
 government/regulatory integrations, no driver-facing mobile app (see
@@ -568,11 +661,29 @@ adds 8 driver documents spanning `VALID`/`EXPIRING_SOON`/`EXPIRED` license
 statuses plus a medical card and a training certificate, and adds one
 dispute connecting the refused `TR-004`/`DL-004` delivery to the driver who
 ran it, with a driver response preserved alongside the client's side.
-All five were applied directly against the Supabase project for this
-environment; on a fresh project, run the migrations in
-`supabase/migrations/` in order, then all five seed files in order
-(`seed.sql`, `seed_phase2.sql`, `seed_phase3_ethiopia.sql`,
-`seed_phase4.sql`, `seed_phase5.sql`).
+Phase 6's fuel/expense/vendor seed data (5 vendors, 6 fuel transactions, 5
+expenses) was applied directly against the live project without ever being
+saved to a `seed_phase6.sql` file -- a pre-existing gap this phase didn't
+introduce but also didn't go back and fix, since reconstructing it exactly
+from the live rows risked drifting from what's actually seeded.
+`supabase/seed_phase7.sql` (Phase 7, written as a file this time) adds 2
+repair-shop vendors (Kaliti Heavy Truck Garage, Adama Truck Service
+Center), 5 maintenance schedules covering all three rule types
+(`MILEAGE`/`TIME`/`TIME_AND_MILEAGE`) with a spread of due statuses
+(`OVERDUE`/`DUE_SOON`/`UPCOMING`), 7 maintenance issues covering all 7
+issue statuses and varied severities/sources (one sourced from a failed
+inspection item, not a driver report), 6 work orders across the full
+lifecycle (`AWAITING_PARTS`, `IN_REPAIR`, two `COMPLETED` with parts+labor
+cost breakdowns, one preventive `APPROVED`, one `CANCELLED`), and 4
+inspections (2 `PASSED`, 2 `PARTIAL` -- one of the `PARTIAL`s has its
+failed item already converted into a linked maintenance issue, the other
+still has the conversion pending, to exercise both states of that flow).
+On a fresh project, run the migrations in `supabase/migrations/` in order,
+then the seed files that exist in order (`seed.sql`, `seed_phase2.sql`,
+`seed_phase3_ethiopia.sql`, `seed_phase4.sql`, `seed_phase5.sql`,
+`seed_phase7.sql`) -- Phase 6's data will need to be re-entered through the
+app's own Record Fuel/Add Expense/Add Vendor forms, or reconstructed by
+hand, since no file for it exists.
 
 ## Known limitations (Phase 2)
 
@@ -721,6 +832,44 @@ environment; on a fresh project, run the migrations in
 - **Role restrictions are still app-layer only, not yet RLS** -- same
   constraint as every prior phase, now also covering `fuel_transactions`/
   `expenses`/`vendors`.
+- **GPS still goes stale without a sync** -- unchanged since Phase 2.
+
+## Known limitations (Phase 7)
+
+- **Inspection checklist templates are application code, not a DB table**
+  (`DEFAULT_CHECKLISTS` in `src/lib/domain/inspection.ts`) -- the spec
+  explicitly allows this to move to a configurable table "later," so a
+  premature schema table wasn't built; adding/editing checklist items today
+  requires a code change, not an admin UI action.
+- **`assigned_to` on a work order is a staff member, not the technician who
+  did the work** -- it's an FK to `profiles` (whoever at the company is
+  coordinating the repair), while the actual mechanic's name is a free-text
+  `maintenance_labor.technician_name` field, since external garage staff
+  (this org's demo data uses two outside repair shops) have no `profiles`
+  row of their own. Correct for how the business actually operates, but
+  worth knowing if a future phase wants to report "which technician did the
+  most jobs" -- that data lives in a text column, not a normalized one.
+- **Vehicle Detail's Maintenance/Inspections tabs show full history, no
+  date-range filter** -- same, deliberate consistency-over-completeness
+  call Phase 6 made for the Fuel/Expenses tabs; none of the 10 tabs on that
+  page are date-filtered.
+- **Phase 6's own seed data has no saved seed file** (see
+  [Seeding](#seeding)) -- discovered while writing this phase's seed file
+  and disclosed rather than silently worked around; reconstructing it
+  exactly from the live database risked producing a file that doesn't
+  actually match what's seeded, which would be worse than no file.
+- **`maintenance_parts.total_cost` being a DB-generated column was a
+  pre-existing fact this phase's own `addMaintenancePart` action initially
+  got wrong** -- it explicitly inserted a computed `total_cost` value,
+  which Postgres rejects for a `GENERATED ALWAYS` column; caught while
+  seeding demo data (the same insert shape the action uses), fixed by
+  omitting the column and letting Postgres compute it, confirmed against
+  the live schema afterward. Mentioned here because it was a real bug in
+  code this phase shipped, not just a seed-script mistake.
+- **Role restrictions are still app-layer only, not yet RLS** -- same
+  constraint as every prior phase, now also covering `vendors`/
+  `maintenance_schedules`/`maintenance_issues`/`work_orders`/
+  `maintenance_parts`/`maintenance_labor`/`inspections`/`inspection_items`.
 - **GPS still goes stale without a sync** -- unchanged since Phase 2.
 
 ## Verification performed
@@ -968,3 +1117,78 @@ environment; on a fresh project, run the migrations in
   smoke test. Everything past the login wall was instead verified at the
   domain/data/query layer as shown above, plus the full production build
   succeeding with every new route present.
+
+**Phase 7 (additional):**
+- `npm run build`, `npx tsc --noEmit -p .`, `npx eslint .` -- all clean
+  across the whole project, run again after every migration and after the
+  seed data surfaced a real bug (see below), not just once at the end.
+- All 6 migrations (`maintenance_issue_work_order_workflow`,
+  `maintenance_labor_and_parts`, `expense_work_order_link`,
+  `inspection_items_and_overhaul`, `maintenance_audit_triggers`,
+  `work_order_completion_fields`) applied to and verified against the live
+  database; regenerated TypeScript types confirmed to carry every new
+  column/enum via direct grep before use. The `recent_activity_feed` and
+  `inspection_type`-default-dropping steps (see enum-swap-under-a-view and
+  drop-default-before-drop-type issues below) were each confirmed via
+  direct `pg_get_viewdef`/`pg_class.reloptions` inspection before and after,
+  not just "the migration ran without erroring."
+- **A real bug was found and fixed via the seed data, not just via
+  typecheck**: `addMaintenancePart` (`src/app/(app)/maintenance/work-
+  orders/actions.ts`) explicitly inserted a `total_cost` value into
+  `maintenance_parts`, a column that is `GENERATED ALWAYS AS (quantity *
+  unit_cost) STORED` at the database level -- TypeScript had no way to
+  catch this (the generated `Insert` type still accepts the field), so it
+  only surfaced when the seed script's insert of the same shape hit
+  Postgres directly and errored `cannot insert a non-DEFAULT value into
+  column "total_cost"`. Fixed by omitting the column from the insert;
+  re-verified by re-running the seed insert successfully and confirming
+  the generated values (`quantity x unit_cost`) matched by direct query.
+- Seed data (2 repair-shop vendors, 5 new maintenance schedules across all
+  3 rule types, 7 maintenance issues across all 7 statuses, 6 work orders
+  across the full lifecycle, 6 parts, 3 labor entries, 4 inspections, 52
+  inspection items) applied directly and verified with SQL mirroring the
+  app's own query/computation shapes:
+  - Every `work_orders.total_cost` on a `COMPLETED` order was confirmed by
+    direct query to equal the sum of its own `maintenance_parts.total_cost`
+    + `maintenance_labor.total_cost` rows exactly (2600 = 1800 + 800; 6600
+    = 4800 + 1800), matching what `completeWorkOrder`'s
+    `computeWorkOrderCostBreakdown` call computes; an in-progress order
+    correctly carries `total_cost: null`, not a running guess.
+  - The 5 new maintenance schedules were seeded to deliberately span all
+    three due-status buckets `computeMaintenanceDue` can produce --
+    `OVERDUE` (a `TIME` rule past its date, a `TIME_AND_MILEAGE` rule past
+    both), `DUE_SOON` (a `MILEAGE` rule within the 1,500km threshold), and
+    `UPCOMING` (a fully-known `TIME_AND_MILEAGE` rule not yet due) -- on
+    top of the one pre-existing schedule that already exercised the
+    partial-`UNKNOWN`-mileage case from Phase 2's seed data.
+  - One seeded inspection (`safety` type on unit 103) has a `FAIL` item
+    with `created_issue_id` already pointing at a real `maintenance_issues`
+    row (`source: 'inspection'`, title following the app's own
+    `"{category}: {item} (failed inspection)"` convention) -- confirming
+    the failed-item-to-issue link renders correctly with real linked data,
+    not just a code review of `createIssueFromInspectionItem`. A second
+    seeded inspection has a `FAIL` item with `created_issue_id: null`, so
+    the pending "Create Maintenance Issue" button also has real data to
+    render against.
+  - `audit_logs` confirmed exactly one row per insert across all 7
+    maintenance/inspection tables (5 schedules, 7 issues, 6 work orders, 6
+    parts, 3 labor, 4 inspections, 52 items -- the one pre-existing
+    schedule from Phase 2 correctly has no audit row, since the trigger
+    didn't exist yet when it was inserted), confirming the new
+    `audit_changes` trigger attachment from migration 4 actually fires.
+- Re-ran the security advisor after all 6 migrations and the seed data: no
+  new findings beyond the same pre-existing intentional ones from every
+  prior phase (the two `SECURITY DEFINER` RPC warnings and disabled leaked-
+  password protection, both present since Phase 1/2).
+- **Live route smoke test**: started the dev server and issued direct HTTP
+  requests (not a headless browser this time, but the same "does a logged-
+  out request to a new route crash or redirect cleanly" question Phase 6's
+  smoke test answered) against `/maintenance`, `/maintenance/work-orders`,
+  `/maintenance/work-orders/new`, `/inspections`, `/inspections/new`, and a
+  vehicle detail page -- all returned clean `307` redirects to `/login`,
+  none a `500` or an unhandled exception, and the dev server's own log
+  showed no errors. Everything past the login wall was instead verified at
+  the domain/data/query layer as shown above, plus the full production
+  build succeeding with every new route present -- same sandbox egress
+  constraint as every prior phase for anything requiring an authenticated
+  session.

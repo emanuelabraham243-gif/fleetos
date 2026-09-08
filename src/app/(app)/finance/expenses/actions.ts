@@ -59,6 +59,7 @@ export async function createExpense(
   const vehicleId = String(formData.get("vehicle_id") ?? "").trim() || null;
   const driverId = String(formData.get("driver_id") ?? "").trim() || null;
   const tripId = String(formData.get("trip_id") ?? "").trim() || null;
+  const workOrderId = String(formData.get("work_order_id") ?? "").trim() || null;
   const vendorId = String(formData.get("vendor_id") ?? "").trim() || null;
   const paymentMethod = String(formData.get("payment_method") ?? "").trim() || null;
 
@@ -71,6 +72,7 @@ export async function createExpense(
     vehicle_id: vehicleId,
     driver_id: driverId,
     trip_id: tripId,
+    work_order_id: workOrderId,
     vendor_id: vendorId,
     vendor_name: String(formData.get("vendor_name") ?? "").trim() || null,
     payment_method: paymentMethod as Database["public"]["Enums"]["payment_method"] | null,
@@ -103,6 +105,7 @@ export async function createExpense(
   revalidatePath("/finance/expenses");
   if (vehicleId) revalidatePath(`/vehicles/${vehicleId}`);
   if (tripId) revalidatePath(`/trips/${tripId}`);
+  if (workOrderId) revalidatePath(`/maintenance/work-orders/${workOrderId}`);
   redirect("/finance/expenses");
 }
 

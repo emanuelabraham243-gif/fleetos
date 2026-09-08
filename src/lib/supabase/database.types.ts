@@ -757,6 +757,7 @@ export type Database = {
           vendor_id: string | null
           vendor_name: string | null
           void_reason: string | null
+          work_order_id: string | null
         }
         Insert: {
           amount: number
@@ -785,6 +786,7 @@ export type Database = {
           vendor_id?: string | null
           vendor_name?: string | null
           void_reason?: string | null
+          work_order_id?: string | null
         }
         Update: {
           amount?: number
@@ -813,6 +815,7 @@ export type Database = {
           vendor_id?: string | null
           vendor_name?: string | null
           void_reason?: string | null
+          work_order_id?: string | null
         }
         Relationships: [
           {
@@ -869,6 +872,13 @@ export type Database = {
             columns: ["vendor_id"]
             isOneToOne: false
             referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
             referencedColumns: ["id"]
           },
         ]
@@ -1302,6 +1312,79 @@ export type Database = {
           },
         ]
       }
+      inspection_items: {
+        Row: {
+          category: string
+          created_at: string
+          created_issue_id: string | null
+          id: string
+          inspection_id: string
+          item_name: string
+          note: string | null
+          organization_id: string
+          result: Database["public"]["Enums"]["inspection_item_result"]
+          severity:
+            | Database["public"]["Enums"]["maintenance_issue_severity"]
+            | null
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          created_issue_id?: string | null
+          id?: string
+          inspection_id: string
+          item_name: string
+          note?: string | null
+          organization_id: string
+          result?: Database["public"]["Enums"]["inspection_item_result"]
+          severity?:
+            | Database["public"]["Enums"]["maintenance_issue_severity"]
+            | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          created_issue_id?: string | null
+          id?: string
+          inspection_id?: string
+          item_name?: string
+          note?: string | null
+          organization_id?: string
+          result?: Database["public"]["Enums"]["inspection_item_result"]
+          severity?:
+            | Database["public"]["Enums"]["maintenance_issue_severity"]
+            | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inspection_items_created_issue_id_fkey"
+            columns: ["created_issue_id"]
+            isOneToOne: false
+            referencedRelation: "maintenance_issues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_items_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inspections: {
         Row: {
           created_at: string
@@ -1309,9 +1392,10 @@ export type Database = {
           findings: string | null
           id: string
           inspection_type: Database["public"]["Enums"]["inspection_type"]
+          inspector_id: string | null
           odometer_km: number | null
           organization_id: string
-          passed: boolean
+          overall_result: Database["public"]["Enums"]["inspection_overall_result"]
           performed_at: string
           updated_at: string
           vehicle_id: string
@@ -1321,10 +1405,11 @@ export type Database = {
           driver_id?: string | null
           findings?: string | null
           id?: string
-          inspection_type?: Database["public"]["Enums"]["inspection_type"]
+          inspection_type: Database["public"]["Enums"]["inspection_type"]
+          inspector_id?: string | null
           odometer_km?: number | null
           organization_id: string
-          passed?: boolean
+          overall_result?: Database["public"]["Enums"]["inspection_overall_result"]
           performed_at?: string
           updated_at?: string
           vehicle_id: string
@@ -1335,9 +1420,10 @@ export type Database = {
           findings?: string | null
           id?: string
           inspection_type?: Database["public"]["Enums"]["inspection_type"]
+          inspector_id?: string | null
           odometer_km?: number | null
           organization_id?: string
-          passed?: boolean
+          overall_result?: Database["public"]["Enums"]["inspection_overall_result"]
           performed_at?: string
           updated_at?: string
           vehicle_id?: string
@@ -1348,6 +1434,13 @@ export type Database = {
             columns: ["driver_id"]
             isOneToOne: false
             referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspections_inspector_id_fkey"
+            columns: ["inspector_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -1436,7 +1529,11 @@ export type Database = {
         Row: {
           created_at: string
           description: string | null
+          dismissed_reason: string | null
+          driver_id: string | null
           id: string
+          issue_type: Database["public"]["Enums"]["maintenance_issue_type"]
+          odometer_km: number | null
           organization_id: string
           reported_at: string
           reported_by: string | null
@@ -1451,7 +1548,11 @@ export type Database = {
         Insert: {
           created_at?: string
           description?: string | null
+          dismissed_reason?: string | null
+          driver_id?: string | null
           id?: string
+          issue_type: Database["public"]["Enums"]["maintenance_issue_type"]
+          odometer_km?: number | null
           organization_id: string
           reported_at?: string
           reported_by?: string | null
@@ -1466,7 +1567,11 @@ export type Database = {
         Update: {
           created_at?: string
           description?: string | null
+          dismissed_reason?: string | null
+          driver_id?: string | null
           id?: string
+          issue_type?: Database["public"]["Enums"]["maintenance_issue_type"]
+          odometer_km?: number | null
           organization_id?: string
           reported_at?: string
           reported_by?: string | null
@@ -1479,6 +1584,13 @@ export type Database = {
           vehicle_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "maintenance_issues_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "maintenance_issues_organization_id_fkey"
             columns: ["organization_id"]
@@ -1502,38 +1614,117 @@ export type Database = {
           },
         ]
       }
+      maintenance_labor: {
+        Row: {
+          created_at: string
+          description: string | null
+          fixed_amount: number | null
+          hours: number | null
+          id: string
+          notes: string | null
+          organization_id: string
+          rate: number | null
+          technician_name: string | null
+          total_cost: number
+          updated_at: string
+          vendor_id: string | null
+          work_order_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          fixed_amount?: number | null
+          hours?: number | null
+          id?: string
+          notes?: string | null
+          organization_id: string
+          rate?: number | null
+          technician_name?: string | null
+          total_cost: number
+          updated_at?: string
+          vendor_id?: string | null
+          work_order_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          fixed_amount?: number | null
+          hours?: number | null
+          id?: string
+          notes?: string | null
+          organization_id?: string
+          rate?: number | null
+          technician_name?: string | null
+          total_cost?: number
+          updated_at?: string
+          vendor_id?: string | null
+          work_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maintenance_labor_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_labor_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_labor_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       maintenance_parts: {
         Row: {
           created_at: string
           id: string
+          notes: string | null
           organization_id: string
           part_name: string
           part_number: string | null
           quantity: number
           total_cost: number | null
           unit_cost: number
+          updated_at: string
+          vendor_id: string | null
           work_order_id: string
         }
         Insert: {
           created_at?: string
           id?: string
+          notes?: string | null
           organization_id: string
           part_name: string
           part_number?: string | null
           quantity?: number
           total_cost?: number | null
           unit_cost?: number
+          updated_at?: string
+          vendor_id?: string | null
           work_order_id: string
         }
         Update: {
           created_at?: string
           id?: string
+          notes?: string | null
           organization_id?: string
           part_name?: string
           part_number?: string | null
           quantity?: number
           total_cost?: number | null
           unit_cost?: number
+          updated_at?: string
+          vendor_id?: string | null
           work_order_id?: string
         }
         Relationships: [
@@ -1542,6 +1733,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_parts_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
             referencedColumns: ["id"]
           },
           {
@@ -2473,14 +2671,26 @@ export type Database = {
       }
       work_orders: {
         Row: {
+          assigned_to: string | null
           closed_at: string | null
+          completion_notes: string | null
+          completion_odometer_km: number | null
           created_at: string
           currency: string
           description: string | null
+          downtime_end_at: string | null
+          downtime_start_at: string | null
+          estimated_completion_at: string | null
+          estimated_cost: number | null
           id: string
           maintenance_issue_id: string | null
+          maintenance_schedule_id: string | null
+          maintenance_type: Database["public"]["Enums"]["maintenance_type"]
+          odometer_km: number | null
           opened_at: string
           organization_id: string
+          priority: Database["public"]["Enums"]["work_order_priority"]
+          started_at: string | null
           status: Database["public"]["Enums"]["work_order_status"]
           title: string
           total_cost: number | null
@@ -2489,14 +2699,26 @@ export type Database = {
           vendor_id: string | null
         }
         Insert: {
+          assigned_to?: string | null
           closed_at?: string | null
+          completion_notes?: string | null
+          completion_odometer_km?: number | null
           created_at?: string
           currency?: string
           description?: string | null
+          downtime_end_at?: string | null
+          downtime_start_at?: string | null
+          estimated_completion_at?: string | null
+          estimated_cost?: number | null
           id?: string
           maintenance_issue_id?: string | null
+          maintenance_schedule_id?: string | null
+          maintenance_type?: Database["public"]["Enums"]["maintenance_type"]
+          odometer_km?: number | null
           opened_at?: string
           organization_id: string
+          priority?: Database["public"]["Enums"]["work_order_priority"]
+          started_at?: string | null
           status?: Database["public"]["Enums"]["work_order_status"]
           title: string
           total_cost?: number | null
@@ -2505,14 +2727,26 @@ export type Database = {
           vendor_id?: string | null
         }
         Update: {
+          assigned_to?: string | null
           closed_at?: string | null
+          completion_notes?: string | null
+          completion_odometer_km?: number | null
           created_at?: string
           currency?: string
           description?: string | null
+          downtime_end_at?: string | null
+          downtime_start_at?: string | null
+          estimated_completion_at?: string | null
+          estimated_cost?: number | null
           id?: string
           maintenance_issue_id?: string | null
+          maintenance_schedule_id?: string | null
+          maintenance_type?: Database["public"]["Enums"]["maintenance_type"]
+          odometer_km?: number | null
           opened_at?: string
           organization_id?: string
+          priority?: Database["public"]["Enums"]["work_order_priority"]
+          started_at?: string | null
           status?: Database["public"]["Enums"]["work_order_status"]
           title?: string
           total_cost?: number | null
@@ -2522,10 +2756,24 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "work_orders_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "work_orders_maintenance_issue_id_fkey"
             columns: ["maintenance_issue_id"]
             isOneToOne: false
             referencedRelation: "maintenance_issues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_orders_maintenance_schedule_id_fkey"
+            columns: ["maintenance_schedule_id"]
+            isOneToOne: false
+            referencedRelation: "maintenance_schedules"
             referencedColumns: ["id"]
           },
           {
@@ -2683,12 +2931,16 @@ export type Database = {
         | "cargo_damage"
         | "safety"
         | "other"
+      inspection_item_result: "PASS" | "FAIL" | "NOT_APPLICABLE" | "UNKNOWN"
+      inspection_overall_result: "PASSED" | "FAILED" | "PARTIAL" | "UNKNOWN"
       inspection_type:
         | "pre_trip"
         | "post_trip"
-        | "periodic"
-        | "annual"
-        | "other"
+        | "routine"
+        | "maintenance"
+        | "safety"
+        | "damage"
+        | "return_to_service"
       invoice_status: "draft" | "sent" | "paid" | "overdue" | "void"
       maintenance_issue_severity: "low" | "medium" | "high" | "critical"
       maintenance_issue_source:
@@ -2698,11 +2950,26 @@ export type Database = {
         | "scheduled"
         | "other"
       maintenance_issue_status:
-        | "open"
-        | "acknowledged"
-        | "in_progress"
-        | "resolved"
-        | "wont_fix"
+        | "REPORTED"
+        | "ACKNOWLEDGED"
+        | "UNDER_DIAGNOSIS"
+        | "WORK_ORDER_CREATED"
+        | "RESOLVED"
+        | "CLOSED"
+        | "DISMISSED"
+      maintenance_issue_type:
+        | "engine"
+        | "transmission"
+        | "brakes"
+        | "tires"
+        | "electrical"
+        | "cooling"
+        | "suspension"
+        | "body"
+        | "gps"
+        | "fuel_system"
+        | "other"
+      maintenance_type: "PREVENTIVE" | "CORRECTIVE" | "INSPECTION" | "EMERGENCY"
       movement_state: "moving" | "stationary" | "idle" | "unknown"
       org_role:
         | "owner"
@@ -2755,7 +3022,17 @@ export type Database = {
         | "insurance"
         | "other"
         | "tire_supplier"
-      work_order_status: "open" | "in_progress" | "completed" | "cancelled"
+      work_order_priority: "LOW" | "NORMAL" | "HIGH" | "CRITICAL"
+      work_order_status:
+        | "DRAFT"
+        | "APPROVED"
+        | "ASSIGNED"
+        | "DIAGNOSIS"
+        | "AWAITING_PARTS"
+        | "IN_REPAIR"
+        | "INSPECTION"
+        | "COMPLETED"
+        | "CANCELLED"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3004,7 +3281,17 @@ export const Constants = {
         "safety",
         "other",
       ],
-      inspection_type: ["pre_trip", "post_trip", "periodic", "annual", "other"],
+      inspection_item_result: ["PASS", "FAIL", "NOT_APPLICABLE", "UNKNOWN"],
+      inspection_overall_result: ["PASSED", "FAILED", "PARTIAL", "UNKNOWN"],
+      inspection_type: [
+        "pre_trip",
+        "post_trip",
+        "routine",
+        "maintenance",
+        "safety",
+        "damage",
+        "return_to_service",
+      ],
       invoice_status: ["draft", "sent", "paid", "overdue", "void"],
       maintenance_issue_severity: ["low", "medium", "high", "critical"],
       maintenance_issue_source: [
@@ -3015,12 +3302,28 @@ export const Constants = {
         "other",
       ],
       maintenance_issue_status: [
-        "open",
-        "acknowledged",
-        "in_progress",
-        "resolved",
-        "wont_fix",
+        "REPORTED",
+        "ACKNOWLEDGED",
+        "UNDER_DIAGNOSIS",
+        "WORK_ORDER_CREATED",
+        "RESOLVED",
+        "CLOSED",
+        "DISMISSED",
       ],
+      maintenance_issue_type: [
+        "engine",
+        "transmission",
+        "brakes",
+        "tires",
+        "electrical",
+        "cooling",
+        "suspension",
+        "body",
+        "gps",
+        "fuel_system",
+        "other",
+      ],
+      maintenance_type: ["PREVENTIVE", "CORRECTIVE", "INSPECTION", "EMERGENCY"],
       movement_state: ["moving", "stationary", "idle", "unknown"],
       org_role: ["owner", "admin", "dispatcher", "manager", "driver", "viewer"],
       payment_method: [
@@ -3067,7 +3370,18 @@ export const Constants = {
         "other",
         "tire_supplier",
       ],
-      work_order_status: ["open", "in_progress", "completed", "cancelled"],
+      work_order_priority: ["LOW", "NORMAL", "HIGH", "CRITICAL"],
+      work_order_status: [
+        "DRAFT",
+        "APPROVED",
+        "ASSIGNED",
+        "DIAGNOSIS",
+        "AWAITING_PARTS",
+        "IN_REPAIR",
+        "INSPECTION",
+        "COMPLETED",
+        "CANCELLED",
+      ],
     },
   },
 } as const
