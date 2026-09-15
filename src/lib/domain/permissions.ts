@@ -15,3 +15,10 @@ const FLEET_MANAGEMENT_ROLES: readonly OrgRole[] = ["owner", "admin", "dispatche
 export function canManageFleet(role: OrgRole): boolean {
   return FLEET_MANAGEMENT_ROLES.includes(role);
 }
+
+/** Organization-level administration (Settings, Users, GPS connection config) -- narrower than fleet management, mirrors the DB's own `is_org_admin()`. */
+const ORG_ADMIN_ROLES: readonly OrgRole[] = ["owner", "admin"];
+
+export function canManageOrg(role: OrgRole): boolean {
+  return ORG_ADMIN_ROLES.includes(role);
+}

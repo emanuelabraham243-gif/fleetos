@@ -37,6 +37,18 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
   return data;
 }
 
+/** Every member of the caller's organization, active or deactivated -- the `/system/users` list. Unlike getOrgMembers, this never excludes deactivated profiles, since the page needs to show and reactivate them. */
+export async function getAllOrgProfiles(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<Database["public"]["Tables"]["profiles"]["Row"][]> {
+  const { data, error } = await supabase.from("profiles").select("*").order("full_name", { ascending: true });
+
+  if (error) {
+    throw new Error(`Failed to load organization profiles: ${error.message}`);
+  }
+  return data;
+}
+
 /** Every active member of the caller's organization -- for internal-assignee pickers (e.g. Work Order technician). */
 export async function getOrgMembers(
   supabase: Awaited<ReturnType<typeof createClient>>,

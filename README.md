@@ -683,24 +683,116 @@ existed unused since Phase 1 (`revenues`, `invoices`, `payments`, plus
   invoice needs far fewer fields than a fuel/expense/maintenance record,
   so a full page for it would have been unwarranted weight).
 
+### Compliance, Issues, Intelligence & System (Phase 9)
+
+The last eleven placeholder screens -- every remaining page in the app
+that still rendered nothing but a title and description. All eleven are
+built on tables that already existed (some since Phase 1) but had never
+been queried fleet-wide: `contracts`, `vehicle_documents`/`driver_documents`,
+`incidents`/`incident_evidence`, `disputes`, `audit_logs`,
+`gps_connections`/`gps_providers`/`vehicle_devices`, `organizations`, and
+`profiles`.
+
+- **Compliance: Contracts** (`/compliance/contracts`) -- a real list with
+  Create Contract and status transitions (`draft -> active -> expired`/
+  `terminated`, both terminal, never reopened -- mirrors the work-order and
+  maintenance-issue state-machine pattern from Phase 7). Contract numbers
+  are server-generated (`CNT-XXX`), the same count-based sequence as
+  `TR-XXX`/`INV-XXX`.
+- **Compliance: Documents** (`/compliance/documents`) -- the fleet-wide
+  view Vehicle Detail's and Driver Detail's own Documents tabs never
+  provided: every vehicle *and* driver document in one filterable table,
+  status derived with the same `computeDocumentStatus` those tabs already
+  use (so a document can never read "valid" in one place and "expired" in
+  another). Also fixes a latent gap found while building it: the per-vehicle
+  DocumentsTab rendered `file_url` as a direct link even though the
+  `documents` bucket is private -- this fleet-wide view generates a proper
+  signed URL instead (the same pattern `getDriverDocuments` already used),
+  though the per-vehicle tab itself was left as-is (out of this phase's
+  scope; noted below).
+- **Issues: Incidents** (`/issues/incidents`, `/issues/incidents/new`,
+  `/issues/incidents/[id]`) -- a fleet-wide list, a real Report Incident
+  form, and a detail page with an Evidence timeline. Every evidence entry
+  is tagged `fact`/`calculation`/`user_input`/`interpretation`/`decision`
+  and a source (`gps`/`document`/`photo`/`statement`/`system`/`other`) at
+  the moment it's added -- the spec's own vocabulary for never dressing up
+  an observation as more certain than it is, and a real enum
+  (`evidence_kind`/`evidence_source`) that had existed on
+  `incident_evidence` since Phase 1 without a UI. Status
+  (`open -> investigating -> resolved -> closed`, `closed` terminal) is a
+  new domain state machine (`src/lib/domain/incident.ts`).
+- **Issues: Disputes** (`/issues/disputes`, `/issues/disputes/[id]`) -- the
+  management view the trip/delivery/driver "Raise Dispute" flows (Phase 4/5)
+  never had anywhere to go: a fleet-wide list and a detail page showing the
+  original description, the driver's own response (append-only, never
+  overwritten -- Phase 5), and the resolution. A new
+  `transitionDisputeStatus` action (open/under_review ->
+  resolved/rejected/withdrawn) requires a resolution for resolved/rejected
+  (the reasoning is never left implicit) but not for withdrawn (nobody is
+  claiming a determination was made).
+- **Intelligence: Alerts** (`/intelligence/alerts`) -- the same
+  `getAttentionItems`/`AttentionRequired` Command Center already uses, as
+  its own full page with severity counts -- deliberately not a second
+  alerting system, just the existing one given room to show everything, not
+  only what fits on the dashboard.
+- **Intelligence: Analytics** (`/intelligence/analytics`) -- per-vehicle
+  cost/km and profit reuse the exact `getVehicleFinancialSummary` Vehicle
+  Detail's Overview tab already shows (so the two can never disagree);
+  fuel efficiency (L/100km) is computed fresh with real `volume_liters`
+  via the same `computeFuelConsumption` used everywhere else. Delivery
+  "outcomes" are a real, observed distribution
+  (`DELIVERED`/`DAMAGED`/`PARTIALLY_DELIVERED`/`REFUSED`/`CANCELLED`
+  counts) -- deliberately not an invented "on-time %", since the schema
+  has no expected-vs-actual-arrival pair to compute one from honestly.
+- **Intelligence: Reports** (`/intelligence/reports`) -- three generated
+  summaries (Monthly Financial, Fleet Utilization, Maintenance Cost),
+  computed on demand from the same summary functions the Revenue/Expenses/
+  Fuel/Maintenance pages already use, never a static export that could
+  drift from the live data.
+- **System: Audit Log** (`/system/audit-log`) -- `audit_logs` (populated
+  since Phase 1 by every phase's `audit_changes` trigger) finally has a
+  browse screen: date-range and table-name filters, and a computed
+  "changed fields" column for `update` rows (diffing `previous_value`
+  against `new_value`) rather than dumping raw JSON.
+- **System: Health & Integrations** (`/system/health`,
+  `/system/integrations`) -- Health shows the same per-vehicle
+  `computeGpsStatus`/`formatGpsFreshness` the Command Center map already
+  uses, plus GPS connection health; Integrations lists the
+  `gps_connections`/`gps_providers` roster with device counts and reuses
+  the existing "Sync GPS" button (`POST /api/gps/sync`, Phase 1) rather
+  than building a second sync trigger.
+- **System: Settings & Users** (`/system/settings`, `/system/users`) --
+  organization profile (name/timezone) and member management (role,
+  deactivate/reactivate -- never a hard delete, same convention as every
+  voided expense or cancelled trip), gated by a new, narrower
+  `canManageOrg` permission check (owner/admin only, mirroring the
+  database's own `is_org_admin()`) rather than the fleet-wide
+  `canManageFleet` every other write action uses. Both actions refuse to
+  target your own account -- changing your own role or deactivating
+  yourself could lock you out of the page that lets you undo it.
+- **A real, pre-existing audit-coverage gap was found and fixed** (same
+  class of bug as Phase 8's revenues/invoices/payments fix)
+  (`supabase/migrations/20260916090000_issues_audit_insert_coverage.sql`)
+  -- `incidents`/`disputes`' own `audit_changes` trigger was bound only to
+  `UPDATE OR DELETE` since Phase 1, so creating either one never produced
+  an audit_logs row. Brought up to `INSERT OR UPDATE OR DELETE` before this
+  phase's Report Incident / dispute-creation flows started writing to them.
+
 ## What's deliberately not here
 
-No CRUD for Compliance, Intelligence, or Issues beyond a working
-Incidents-report link-out and the Disputes linkage (the standalone
-Disputes list/detail screens themselves are still placeholders --
-disputes can be *raised* and responded to from a trip, delivery, or driver
-page, but there's no `/issues/disputes` management UI yet), plus the
-quick-action routes still deferred from Phase 2/3 (`/issues/incidents/new`
-still renders a placeholder -- `/finance/fuel/new`/`/finance/expenses/new`
-are real forms as of Phase 6, `/maintenance/new` is a real Schedule
-Maintenance form as of Phase 7, and `/finance/revenue`/`/finance/payments`
-are real pages as of Phase 8). No non-mock GPS adapters, no
-Amharic/i18n UI (deliberately deferred, but the token layer is ready for it
--- see [Language-neutral by design](#language-neutral-by-design)), no
+As of Phase 9, every module in the navigation has a real screen -- no
+route in the app renders only a title and description anymore. What's
+still missing is narrower and named in each phase's own "Known
+limitations" section: no non-mock GPS adapters, no Amharic/i18n UI
+(deliberately deferred, but the token layer is ready for it -- see
+[Language-neutral by design](#language-neutral-by-design)), no
 government/regulatory integrations, no driver-facing mobile app (see
-[Known limitations](#known-limitations-phase-5)). The schema, RLS, and
-navigation route for every deferred module already exist -- only the
-working screen is deferred.
+[Known limitations](#known-limitations-phase-5)), no client-level
+statement/aging report or checklist-template admin UI (see
+[Known limitations](#known-limitations-phase-8) and
+[Phase 7](#known-limitations-phase-7)). The schema and RLS for every
+module were already in place since Phase 1 -- only the working screens
+were built phase by phase.
 
 ## Seeding
 
@@ -755,13 +847,22 @@ be in: `DRAFT` (not yet sent), `SENT` (current, with a partial payment
 already applied so its balance is real), `SENT`+derived-`OVERDUE` (past
 due date, unpaid), derived-`PAID` (a `sent` invoice with a payment covering
 its full balance), and `VOID` (with the reason stamped onto `notes`).
+`supabase/seed_phase9.sql` adds a second GPS connection in an `error`
+state (so System Health's unhealthy-connection signal has something to
+show), 3 more contracts covering the `expired`/`terminated`/`draft`
+statuses Phase 8's 2 `active` ones didn't, 2 more incidents (an `open`
+safety event and a `critical` `investigating` cargo-damage event) with 4
+evidence rows spanning `fact`/`user_input`/`interpretation` kinds, and 2
+more disputes -- one linked to the new cargo-damage incident
+(`incident_id`, `open`), one `resolved` on its own with a real resolution
+recorded.
 
 On a fresh project, run the migrations in `supabase/migrations/` in order,
 then the seed files that exist in order (`seed.sql`, `seed_phase2.sql`,
 `seed_phase3_ethiopia.sql`, `seed_phase4.sql`, `seed_phase5.sql`,
-`seed_phase7.sql`, `seed_phase8.sql`) -- Phase 6's data will need to be
-re-entered through the app's own Record Fuel/Add Expense/Add Vendor forms,
-or reconstructed by hand, since no file for it exists.
+`seed_phase7.sql`, `seed_phase8.sql`, `seed_phase9.sql`) -- Phase 6's data
+will need to be re-entered through the app's own Record Fuel/Add Expense/
+Add Vendor forms, or reconstructed by hand, since no file for it exists.
 
 ## Known limitations (Phase 2)
 
@@ -979,6 +1080,46 @@ or reconstructed by hand, since no file for it exists.
 - **Role restrictions are still app-layer only, not yet RLS** -- same
   constraint as every prior phase, now also covering `clients`/`contracts`/
   `invoices`/`payments`/`revenues`.
+- **GPS still goes stale without a sync** -- unchanged since Phase 2.
+
+## Known limitations (Phase 9)
+
+- **The per-vehicle Documents tab still renders `file_url` as a direct
+  link, not a signed URL** -- the fleet-wide `/compliance/documents` view
+  built this phase fixed this correctly (the `documents` bucket is
+  private), but the original Vehicle Detail `DocumentsTab` from Phase 3
+  was left untouched, since every seeded `vehicle_documents.file_url` is
+  still `null` (this bug has never actually fired against real data) and
+  fixing a Phase 3 component wasn't this phase's scope. Worth fixing
+  before a real document is ever uploaded through that path.
+- **Delivery "on-time %" was deliberately not built** -- the Analytics
+  page's delivery-outcomes report shows the real outcome distribution
+  (`DELIVERED`/`DAMAGED`/etc.) instead, because `deliveries` has no
+  expected-vs-actual-arrival pair to honestly compute an on-time rate
+  from; inventing one would have meant fabricating a number the schema
+  doesn't support.
+- **The Users page doesn't let an admin invite a brand-new person** -- it
+  manages the role and active/inactive state of profiles that already
+  exist (created via Supabase Auth sign-up), since building an invite-by-
+  email flow would mean touching the Auth/sign-up path Phase 1 built,
+  which this phase didn't do. The 2 seeded accounts (owner, dispatcher)
+  are the only ones in the demo org.
+- **Reports are read-only, on-page summaries, not exportable files** -- no
+  PDF/CSV generation was built; the spec's placeholder said "generated
+  operational and financial reports" and this phase read that as
+  "computed on demand," not "downloadable," to avoid adding a document-
+  generation dependency for three summary tables.
+- **Contract-to-revenue reconciliation doesn't exist** -- `getContracts`
+  populates the Record Revenue form's optional dropdown, but nothing
+  validates a revenue row's `contract_id` against that contract's own
+  `rate_type`/`rate_amount`/date range/`status` (e.g. recording revenue
+  against a `terminated` contract isn't blocked). The two tables are
+  linked, not yet reconciled -- same shape of gap already disclosed for
+  Phase 8's contract/invoice relationship.
+- **Role restrictions are still app-layer only, not yet RLS** -- same
+  constraint as every prior phase, now also covering `incidents`/
+  `incident_evidence`/`disputes`/`audit_logs`/`gps_connections`/
+  `gps_providers`/`vehicle_devices`/`organizations`/`profiles`.
 - **GPS still goes stale without a sync** -- unchanged since Phase 2.
 
 ## Verification performed
@@ -1344,3 +1485,43 @@ or reconstructed by hand, since no file for it exists.
   as shown above, plus the full production build succeeding with every new
   route present -- same sandbox egress constraint as every prior phase for
   anything requiring an authenticated session.
+
+**Phase 9 (additional):**
+- `npm run build`, `npx tsc --noEmit -p .`, `npx eslint .` -- all clean
+  across the whole project, re-run after every one of the 11 new sections
+  and again after the migration and seed data.
+- The one new migration (`issues_audit_insert_coverage`) applied to and
+  verified against the live database.
+- **The same class of pre-existing audit-coverage bug Phase 8 found was
+  found again here, independently**: `incidents`/`disputes`' own
+  `audit_changes` trigger, present since Phase 1, was bound only to
+  `UPDATE OR DELETE` -- caught the same way, by seeding real rows and
+  finding zero matching `audit_logs` entries, then confirming via
+  `pg_get_triggerdef` that `INSERT` was missing. Fixed with the migration
+  above.
+- Seed data (1 new GPS connection, 3 new contracts, 2 new incidents with 4
+  evidence rows, 2 new disputes) verified with direct SQL:
+  - Confirmed all 4 `contract_status` values are now represented across
+    the 5 seeded contracts (2 `active` from Phase 8, plus this phase's
+    `expired`/`terminated`/`draft`).
+  - Confirmed the new cargo-damage incident's dispute correctly carries a
+    non-null `incident_id` -- the one seeded row across every phase where
+    `disputes.incident_id` is actually populated, exercising the Dispute
+    Detail page's "Incident" link for the first time against real data.
+  - `audit_logs` confirmed exactly one `insert` row per seeded incident
+    (2) and dispute (2) after the trigger fix.
+- Re-ran the security advisor after the migration and the seed data: no new
+  findings beyond the same pre-existing intentional ones from every prior
+  phase.
+- **Live route smoke test**: same direct-HTTP-request method as every
+  prior phase, against all 13 new/changed routes (`/compliance/contracts`,
+  `/compliance/documents`, `/issues/incidents`, `/issues/incidents/new`,
+  `/issues/disputes`, `/intelligence/alerts`, `/intelligence/analytics`,
+  `/intelligence/reports`, `/system/audit-log`, `/system/health`,
+  `/system/integrations`, `/system/settings`, `/system/users`) -- all
+  returned clean `307` redirects to `/login`, none a `500`, and the dev
+  server's own log showed no errors. Everything past the login wall was
+  instead verified at the domain/data/query layer as shown above, plus the
+  full production build succeeding with every route present -- same
+  sandbox egress constraint as every prior phase for anything requiring an
+  authenticated session.

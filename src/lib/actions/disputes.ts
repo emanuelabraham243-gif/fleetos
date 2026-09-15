@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 
 import { getCurrentProfile } from "@/lib/data/profile";
+import { canTransitionDispute, type DisputeStatus } from "@/lib/domain/dispute";
 import { canManageFleet } from "@/lib/domain/permissions";
+import { DISPUTE_STATUS_LABEL } from "@/lib/i18n/labels";
 import type { Database } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
 
@@ -112,5 +114,63 @@ export async function recordDriverResponse(
   if (error) return { error: error.message };
 
   revalidatePath("/issues/disputes");
+  return { success: true };
+}
+
+export type TransitionDisputeState = { error: string } | { success: true } | null;
+
+/**
+ * open/under_review -> resolved/rejected/withdrawn. A resolution is
+ * required for resolved/rejected (the reasoning behind the outcome, never
+ * left implicit); withdrawn needs none, since nobody is claiming a
+ * determination was made. `resolved_at` is only ever set here, on the one
+ * transition that actually closes the dispute.
+ */
+export async function transitionDisputeStatus(
+  _prevState: TransitionDisputeState,
+  formData: FormData,
+): Promise<TransitionDisputeState> {
+  const profile = await getCurrentProfile();
+  if (!profile || !canManageFleet(profile.role)) {
+    return { error: "You don't have permission to change a dispute's status." };
+  }
+
+  const disputeId = String(formData.get("dispute_id") ?? "").trim();
+  const toStatus = String(formData.get("to_status") ?? "").trim() as DisputeStatus;
+  if (!disputeId || !toStatus) return { error: "Missing dispute or target status." };
+
+  const resolution = String(formData.get("resolution") ?? "").trim();
+  if ((toStatus === "resolved" || toStatus === "rejected") && !resolution) {
+    return { error: "A resolution is required to resolve or reject a dispute." };
+  }
+
+  const supabase = await createClient();
+  const { data: dispute, error: fetchError } = await supabase
+    .from("disputes")
+    .select("status")
+    .eq("id", disputeId)
+    .maybeSingle();
+  if (fetchError) return { error: fetchError.message };
+  if (!dispute) return { error: "Dispute not found." };
+
+  if (!canTransitionDispute(dispute.status, toStatus)) {
+    return {
+      error: `Cannot move a dispute from ${DISPUTE_STATUS_LABEL[dispute.status]} to ${DISPUTE_STATUS_LABEL[toStatus]}.`,
+    };
+  }
+
+  const isTerminal = toStatus === "resolved" || toStatus === "rejected" || toStatus === "withdrawn";
+  const { error } = await supabase
+    .from("disputes")
+    .update({
+      status: toStatus,
+      resolution: resolution || null,
+      resolved_at: isTerminal ? new Date().toISOString() : null,
+    })
+    .eq("id", disputeId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/issues/disputes");
+  revalidatePath(`/issues/disputes/${disputeId}`);
   return { success: true };
 }

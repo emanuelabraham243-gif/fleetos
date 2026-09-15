@@ -300,3 +300,95 @@ export const INVOICE_DISPLAY_STATUS_LABEL: Record<InvoiceDisplayStatus, string> 
   PAID: "Paid",
   VOID: "Void",
 };
+
+type ContractStatus = Database["public"]["Enums"]["contract_status"];
+
+export const CONTRACT_STATUS_LABEL: Record<ContractStatus, string> = {
+  draft: "Draft",
+  active: "Active",
+  expired: "Expired",
+  terminated: "Terminated",
+};
+
+type ContractRateType = Database["public"]["Enums"]["contract_rate_type"];
+
+export const CONTRACT_RATE_TYPE_LABEL: Record<ContractRateType, string> = {
+  flat: "Flat",
+  per_trip: "Per Trip",
+  per_mile: "Per Mile/Km",
+  hourly: "Hourly",
+  other: "Other",
+};
+
+type DisputeType = Database["public"]["Enums"]["dispute_type"];
+
+export const DISPUTE_TYPE_LABEL: Record<DisputeType, string> = {
+  fuel_variance: "Fuel Variance",
+  damage_claim: "Damage Claim",
+  delivery_dispute: "Delivery Dispute",
+  payment_dispute: "Payment Dispute",
+  other: "Other",
+};
+
+type DisputeStatus = Database["public"]["Enums"]["dispute_status"];
+
+export const DISPUTE_STATUS_LABEL: Record<DisputeStatus, string> = {
+  open: "Open",
+  under_review: "Under Review",
+  resolved: "Resolved",
+  rejected: "Rejected",
+  withdrawn: "Withdrawn",
+};
+
+type GpsConnectionStatus = Database["public"]["Enums"]["gps_connection_status"];
+
+export const GPS_CONNECTION_STATUS_LABEL: Record<GpsConnectionStatus, string> = {
+  active: "Active",
+  paused: "Paused",
+  error: "Error",
+  disconnected: "Disconnected",
+};
+
+type OrgRole = Database["public"]["Enums"]["org_role"];
+
+export const ORG_ROLE_LABEL: Record<OrgRole, string> = {
+  owner: "Owner",
+  admin: "Admin",
+  dispatcher: "Dispatcher",
+  manager: "Manager",
+  driver: "Driver",
+  viewer: "Viewer",
+};
+
+type EvidenceKind = Database["public"]["Enums"]["evidence_kind"];
+
+/** The spec's own vocabulary for tagging incident evidence honestly -- what it *is*, never dressed up as more certain than it is. */
+export const EVIDENCE_KIND_LABEL: Record<EvidenceKind, string> = {
+  fact: "Fact",
+  calculation: "Calculation",
+  user_input: "User Input",
+  interpretation: "Interpretation",
+  decision: "Decision",
+};
+
+type EvidenceSource = Database["public"]["Enums"]["evidence_source"];
+
+export const EVIDENCE_SOURCE_LABEL: Record<EvidenceSource, string> = {
+  gps: "GPS",
+  document: "Document",
+  photo: "Photo",
+  statement: "Statement",
+  system: "System",
+  other: "Other",
+};
+
+type VehicleStatus = Database["public"]["Enums"]["vehicle_status"];
+
+/** The raw `vehicles.status` column -- distinct from `VehicleOperationalStatus`, which is a computed, GPS/trip-aware state. */
+export const VEHICLE_STATUS_LABEL: Record<VehicleStatus, string> = {
+  active: "Active",
+  maintenance: "In Maintenance",
+  out_of_service: "Out of Service",
+  sold: "Sold",
+  retired: "Retired",
+};
