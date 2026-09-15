@@ -4,6 +4,7 @@ import type { DocumentStatus } from "@/lib/domain/document";
 import type { DriverOperationalState, DriverStatus } from "@/lib/domain/driver";
 import type { TripStopStatus, TripStopType } from "@/lib/domain/trip-stop";
 import type { VehicleListStatus, VehicleOperationalStatus } from "@/lib/domain/vehicle";
+import type { InvoiceDisplayStatus } from "@/lib/domain/invoice";
 import type { Database } from "@/lib/supabase/database.types";
 
 /**
@@ -290,4 +291,12 @@ export const INSPECTION_ITEM_RESULT_LABEL: Record<InspectionItemResult, string> 
   FAIL: "Fail",
   NOT_APPLICABLE: "N/A",
   UNKNOWN: "Unknown",
+};
+
+export const INVOICE_DISPLAY_STATUS_LABEL: Record<InvoiceDisplayStatus, string> = {
+  DRAFT: "Draft",
+  SENT: "Sent",
+  OVERDUE: "Overdue",
+  PAID: "Paid",
+  VOID: "Void",
 };

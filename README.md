@@ -615,6 +615,74 @@ status: UNKNOWN" rather than guessing.
   no such link before this phase, so a real FK was added rather than
   guessing or skipping the requirement.
 
+### Revenue + Invoicing & Payments (Phase 8)
+
+The accounts-receivable side of Finance: money actually earned, billed to
+a client, and collected -- three separate facts, on three tables that had
+existed unused since Phase 1 (`revenues`, `invoices`, `payments`, plus
+`clients`/`contracts`), never built into a screen until now.
+
+- **Revenue, invoicing, and collection are three separate concerns, never
+  conflated** -- a `revenues` row is money the business actually earned (a
+  trip, a contract, or ad hoc); an `invoices` row is a bill sent to a
+  client; a `payments` row is money actually received against one. There is
+  no join table between revenue and invoices (the schema never had one),
+  so `/finance/revenue` and `/finance/payments` are deliberately two
+  independent views related only by `client_id` -- inventing a link table
+  to force a 1:1 rollup would have been schema scope creep the spec never
+  asked for.
+- **An invoice's PAID/OVERDUE status is never stored, always derived**
+  (`src/lib/domain/invoice.ts`'s `computeInvoiceDisplayStatus`) -- the app
+  itself only ever writes `draft`/`sent`/`void` to `invoices.status` (via
+  Create Invoice / Send / Void); "Paid" and "Overdue" are computed at read
+  time from the balance (total minus active payments) and the due date,
+  the same "never store a fact that can go stale without a cron"
+  discipline as maintenance due-status (Phase 7) and driver document
+  status (Phase 5). A payment posting or a day passing changes the display
+  status immediately, with nothing to keep in sync.
+- **A balance is always total minus active payments, never a separately
+  editable number** (`computeInvoiceBalance`/`computeActivePaymentsTotal`)
+  -- voiding a payment (kept on file with a reason, never deleted, same
+  pattern as every other void action in the app) immediately restores the
+  invoice's balance and its derived status, because the balance was never
+  a stored fact to begin with.
+- **Voiding an invoice is refused while it has an active payment**
+  (`voidInvoice` in `src/app/(app)/finance/payments/actions.ts`) -- the
+  action requires the payment be voided first, so the two facts (an
+  invoice's status and its payment history) can never silently disagree.
+- **Overpayment is never blocked, never fabricated away** -- `recordPayment`
+  accepts any positive amount regardless of the invoice's current balance
+  (real overpayments and credits happen); the balance can legitimately go
+  negative, and the display status simply reads PAID once it reaches zero
+  or below, rather than the app inventing a "you can't do that" rule the
+  business itself doesn't have.
+- **Two tables without a dedicated void-reason column reuse the existing
+  stamp-onto-notes pattern** (`revenues.description`, `invoices.notes`,
+  `payments.notes`) -- the exact `[Voided <iso>] <reason>` convention
+  Phase 6 established for `fuel_transactions` (which also has no
+  `void_reason` column), rather than a migration adding a column three
+  other tables already prove isn't required for this to work.
+- **A real, pre-existing gap in audit coverage was found and fixed**
+  (`supabase/migrations/20260915120000_finance_ar_audit_insert_coverage.sql`)
+  -- `revenues`/`invoices`/`payments`' `audit_changes` trigger had only
+  ever been bound to `UPDATE OR DELETE` since Phase 1, so *creating* a
+  revenue, invoice, or payment never produced an audit_logs row -- only
+  editing or deleting one did. Phase 7's maintenance tables were already
+  bound to `INSERT OR UPDATE OR DELETE`; this phase brings the three
+  finance tables it actually writes to up to that same standard, discovered
+  while seeding demo data and confirmed by direct query before and after.
+- **Invoice numbers are server-generated, never typed** (`nextInvoiceNumber`
+  in `src/app/(app)/finance/payments/actions.ts`) -- the same
+  count-based `INV-XXX` sequence Phase 4 already used for `TR-XXX` trip
+  numbers, not a new numbering convention.
+- **`/finance/revenue` and `/finance/payments` are real pages now** -- Record
+  Revenue is a full page (client/contract/trip pickers, void with a
+  reason); Payments is one page combining an Invoices table (status badges,
+  Send/Record Payment/Void actions gated by the derived status) and a
+  Payments Received history table, with Create Invoice as a dialog (an
+  invoice needs far fewer fields than a fuel/expense/maintenance record,
+  so a full page for it would have been unwarranted weight).
+
 ## What's deliberately not here
 
 No CRUD for Compliance, Intelligence, or Issues beyond a working
@@ -624,8 +692,9 @@ disputes can be *raised* and responded to from a trip, delivery, or driver
 page, but there's no `/issues/disputes` management UI yet), plus the
 quick-action routes still deferred from Phase 2/3 (`/issues/incidents/new`
 still renders a placeholder -- `/finance/fuel/new`/`/finance/expenses/new`
-are real forms as of Phase 6, and `/maintenance/new` is a real Schedule
-Maintenance form as of Phase 7). No non-mock GPS adapters, no
+are real forms as of Phase 6, `/maintenance/new` is a real Schedule
+Maintenance form as of Phase 7, and `/finance/revenue`/`/finance/payments`
+are real pages as of Phase 8). No non-mock GPS adapters, no
 Amharic/i18n UI (deliberately deferred, but the token layer is ready for it
 -- see [Language-neutral by design](#language-neutral-by-design)), no
 government/regulatory integrations, no driver-facing mobile app (see
@@ -678,12 +747,21 @@ cost breakdowns, one preventive `APPROVED`, one `CANCELLED`), and 4
 inspections (2 `PASSED`, 2 `PARTIAL` -- one of the `PARTIAL`s has its
 failed item already converted into a linked maintenance issue, the other
 still has the conversion pending, to exercise both states of that flow).
+`supabase/seed_phase8.sql` adds 2 contracts (a per-trip rate agreement, a
+flat seasonal contract), 5 revenue rows (one per completed/arrived trip
+that actually earned money -- the cancelled `TR-005` correctly has none),
+and 5 invoices deliberately spanning all 5 display states an invoice can
+be in: `DRAFT` (not yet sent), `SENT` (current, with a partial payment
+already applied so its balance is real), `SENT`+derived-`OVERDUE` (past
+due date, unpaid), derived-`PAID` (a `sent` invoice with a payment covering
+its full balance), and `VOID` (with the reason stamped onto `notes`).
+
 On a fresh project, run the migrations in `supabase/migrations/` in order,
 then the seed files that exist in order (`seed.sql`, `seed_phase2.sql`,
 `seed_phase3_ethiopia.sql`, `seed_phase4.sql`, `seed_phase5.sql`,
-`seed_phase7.sql`) -- Phase 6's data will need to be re-entered through the
-app's own Record Fuel/Add Expense/Add Vendor forms, or reconstructed by
-hand, since no file for it exists.
+`seed_phase7.sql`, `seed_phase8.sql`) -- Phase 6's data will need to be
+re-entered through the app's own Record Fuel/Add Expense/Add Vendor forms,
+or reconstructed by hand, since no file for it exists.
 
 ## Known limitations (Phase 2)
 
@@ -870,6 +948,37 @@ hand, since no file for it exists.
   constraint as every prior phase, now also covering `vendors`/
   `maintenance_schedules`/`maintenance_issues`/`work_orders`/
   `maintenance_parts`/`maintenance_labor`/`inspections`/`inspection_items`.
+- **GPS still goes stale without a sync** -- unchanged since Phase 2.
+
+## Known limitations (Phase 8)
+
+- **Revenue and invoices have no join table, by design** (see
+  [Revenue + Invoicing & Payments](#revenue--invoicing--payments-phase-8))
+  -- an invoice's subtotal/tax is entered directly on Create Invoice, not
+  auto-rolled-up from the client's unbilled `revenues` rows. The two views
+  agree via `client_id` only; there's no query anywhere that expects a
+  revenue row and an invoice line item to reconcile 1:1, so this is a real
+  design boundary, not a missing feature.
+- **No client-level statement or aging report** -- `/finance/payments`
+  shows one outstanding/overdue total across all clients and a per-invoice
+  balance, but nothing bucketing a single client's receivables into
+  30/60/90-day aging. The data (`due_date`, active payments per invoice)
+  is all there for a future phase to build one.
+- **Contracts are a simple roster, not enforced** -- `getContracts` lists
+  them for the Record Revenue form's optional dropdown, but nothing
+  validates a revenue row's `contract_id` against the contract's own
+  `rate_type`/`rate_amount`, date range, or `status` (e.g. recording
+  revenue against a `terminated` or `expired` contract is not blocked).
+  The two tables are linked, not yet reconciled.
+- **Currency is per-row, not normalized across a summary** -- every summary
+  card assumes (correctly, in this seed data) that all rows in view share
+  one currency; a fleet that genuinely mixed ETB and USD invoices would see
+  a summary card silently summing across currencies. Every other Finance
+  summary card in the app (Fuel, Expenses) makes the same assumption, so
+  this isn't a new gap, just an inherited one now visible here too.
+- **Role restrictions are still app-layer only, not yet RLS** -- same
+  constraint as every prior phase, now also covering `clients`/`contracts`/
+  `invoices`/`payments`/`revenues`.
 - **GPS still goes stale without a sync** -- unchanged since Phase 2.
 
 ## Verification performed
@@ -1192,3 +1301,46 @@ hand, since no file for it exists.
   build succeeding with every new route present -- same sandbox egress
   constraint as every prior phase for anything requiring an authenticated
   session.
+
+**Phase 8 (additional):**
+- `npm run build`, `npx tsc --noEmit -p .`, `npx eslint .` -- all clean
+  across the whole project, re-run after the migration, after the initial
+  seed, and again after the seed was re-run (see below).
+- The one new migration (`finance_ar_audit_insert_coverage`) applied to and
+  verified against the live database.
+- **A real, pre-existing audit-coverage bug was found while seeding, not
+  just a seed-script mistake**: `revenues`/`invoices`/`payments`' own
+  `audit_changes` trigger, present since Phase 1, was bound only to
+  `UPDATE OR DELETE` -- confirmed by querying `audit_logs` after the first
+  seed insert and finding zero rows for all three tables, then confirming
+  via `pg_get_triggerdef` that `INSERT` was missing from the trigger
+  binding (unlike Phase 7's maintenance tables, which already had it).
+  Fixed with the migration above, then the seed data was deleted and
+  re-inserted so the demo data itself has a complete, consistent audit
+  trail rather than a trail with a hole at the start of it.
+- Seed data (2 contracts, 5 revenue rows, 5 invoices, 2 payments) verified
+  with SQL mirroring the app's own computation:
+  - Every invoice's balance (`total_amount` minus its active payments'
+    sum) was confirmed by direct query to match what
+    `computeInvoiceBalance` would compute, and all 5 of
+    `computeInvoiceDisplayStatus`'s possible outputs were confirmed
+    present in the seeded set: `DRAFT` (INV-004), `SENT` (INV-001, a
+    partial payment leaves a real positive balance), `OVERDUE` (INV-002,
+    unpaid past its due date), `PAID` (INV-003, a payment exactly covering
+    its balance -- derived, not a stored status), and `VOID` (INV-005,
+    with the reason stamped onto `notes`).
+  - `audit_logs` confirmed exactly one `insert` row per seeded revenue (5),
+    invoice (5), and payment (2) after the trigger fix and re-seed, plus
+    one `delete` row each from the first (pre-fix) seed attempt being torn
+    down -- both expected, and both present.
+- Re-ran the security advisor after the migration and the seed data: no new
+  findings beyond the same pre-existing intentional ones from every prior
+  phase.
+- **Live route smoke test**: same direct-HTTP-request method as Phase 7's,
+  against `/finance/revenue`, `/finance/revenue/new`, and
+  `/finance/payments` -- all returned clean `307` redirects to `/login`,
+  none a `500`, and the dev server's own log showed no errors. Everything
+  past the login wall was instead verified at the domain/data/query layer
+  as shown above, plus the full production build succeeding with every new
+  route present -- same sandbox egress constraint as every prior phase for
+  anything requiring an authenticated session.
