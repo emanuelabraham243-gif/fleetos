@@ -94,7 +94,12 @@ export default async function TripDetailPage({
           />
         </TabsContent>
         <TabsContent value="financial" className="mt-4">
-          <FinancialSection summary={financials} />
+          <FinancialSection
+            summary={financials}
+            tripId={trip.id}
+            clientId={trip.client_id}
+            canManage={canManage}
+          />
         </TabsContent>
         <TabsContent value="stops" className="mt-4">
           <StopsSection stops={stops} />

@@ -119,8 +119,16 @@ export interface DeliveryOutcomeBreakdown {
  */
 export async function getDeliveryOutcomeBreakdown(
   supabase: SupabaseClient<Database>,
+  filters: { tripIds?: string[] } = {},
 ): Promise<{ total: number; breakdown: DeliveryOutcomeBreakdown[] }> {
-  const { data, error } = await supabase.from("deliveries").select("status");
+  if (filters.tripIds && filters.tripIds.length === 0) {
+    return { total: 0, breakdown: [] };
+  }
+
+  let query = supabase.from("deliveries").select("status");
+  if (filters.tripIds) query = query.in("trip_id", filters.tripIds);
+
+  const { data, error } = await query;
   if (error) {
     throw new Error(`Failed to load delivery outcomes: ${error.message}`);
   }

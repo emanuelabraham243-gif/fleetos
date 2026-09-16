@@ -66,6 +66,8 @@ export async function createWorkOrder(
   const estimatedCostRaw = String(formData.get("estimated_cost") ?? "").trim();
   const odometerRaw = formData.get("odometer_km");
   const odometerKm = odometerRaw ? Number(odometerRaw) : null;
+  const serviceCategory =
+    (String(formData.get("service_category") ?? "").trim() || null) as Database["public"]["Enums"]["work_order_service_category"] | null;
 
   const supabase = await createClient();
 
@@ -82,10 +84,33 @@ export async function createWorkOrder(
     odometer_km: odometerKm,
     estimated_completion_at: estimatedCompletionRaw ? new Date(estimatedCompletionRaw).toISOString() : null,
     estimated_cost: estimatedCostRaw ? Number(estimatedCostRaw) : null,
+    service_category: serviceCategory,
   };
 
   const { data, error } = await supabase.from("work_orders").insert(insertValues).select("id").single();
   if (error) return { error: error.message };
+
+  if (serviceCategory) {
+    const frontTireCountRaw = String(formData.get("front_tire_count") ?? "").trim();
+    const rearTireCountRaw = String(formData.get("rear_tire_count") ?? "").trim();
+    const { error: serviceDetailsError } = await supabase.from("work_order_service_details").insert({
+      organization_id: profile.organization_id,
+      work_order_id: data.id,
+      filter_type: String(formData.get("filter_type") ?? "").trim() || null,
+      place_serviced: String(formData.get("place_serviced") ?? "").trim() || null,
+      differential_side: String(formData.get("differential_side") ?? "").trim() || null,
+      differential_oil_notes: String(formData.get("differential_oil_notes") ?? "").trim() || null,
+      gearbox_cab_oil_notes: String(formData.get("gearbox_cab_oil_notes") ?? "").trim() || null,
+      trailer_tire: serviceCategory === "GARAGE_TIRE_AXLE_SERVICE" ? formData.get("trailer_tire") === "on" : null,
+      tire_type: String(formData.get("tire_type") ?? "").trim() || null,
+      tire_serial_number: String(formData.get("tire_serial_number") ?? "").trim() || null,
+      front_tire_count: frontTireCountRaw ? Number(frontTireCountRaw) : null,
+      rear_tire_count: rearTireCountRaw ? Number(rearTireCountRaw) : null,
+    });
+    if (serviceDetailsError) {
+      return { error: `Work order created, but the service details failed to save: ${serviceDetailsError.message}` };
+    }
+  }
 
   // Creating a work order from an issue is the one place WORK_ORDER_CREATED
   // is set -- never picked from the issue's own status dropdown. A second

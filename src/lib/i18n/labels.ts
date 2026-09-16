@@ -263,6 +263,26 @@ export const MAINTENANCE_TYPE_LABEL: Record<MaintenanceType, string> = {
   EMERGENCY: "Emergency",
 };
 
+type WorkOrderServiceCategory = Database["public"]["Enums"]["work_order_service_category"];
+
+export const WORK_ORDER_SERVICE_CATEGORY_LABEL: Record<WorkOrderServiceCategory, string> = {
+  ENGINE_OIL_SERVICE: "Engine Oil Service",
+  DIFFERENTIAL_GEARBOX_SERVICE: "Differential/Gearbox Service",
+  GARAGE_TIRE_AXLE_SERVICE: "Garage/Tire-Axle Service",
+  TIRE_PURCHASE_INSTALLATION: "Tire Purchase & Installation",
+};
+
+export const FILTER_TYPE_LABEL: Record<"full" | "half", string> = {
+  full: "Full",
+  half: "Half",
+};
+
+export const DIFFERENTIAL_SIDE_LABEL: Record<"front" | "rear" | "both", string> = {
+  front: "Front",
+  rear: "Rear",
+  both: "Both",
+};
+
 type InspectionTypeEnum = Database["public"]["Enums"]["inspection_type"];
 
 export const INSPECTION_TYPE_LABEL: Record<InspectionTypeEnum, string> = {

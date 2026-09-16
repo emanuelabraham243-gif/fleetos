@@ -14,6 +14,7 @@ import { MaintenanceTab } from "@/components/vehicles/detail/maintenance-tab";
 import { OverviewSection } from "@/components/vehicles/detail/overview-section";
 import { TripsTab } from "@/components/vehicles/detail/trips-tab";
 import { VehicleActionsBar } from "@/components/vehicles/detail/vehicle-actions-bar";
+import { getDeliveryOutcomeBreakdown } from "@/lib/data/analytics";
 import { getDrivers } from "@/lib/data/drivers";
 import { getVehicleAssignmentHistory } from "@/lib/data/driver-assignments";
 import { getVehicleExpenses } from "@/lib/data/expenses";
@@ -80,6 +81,7 @@ export default async function VehicleDetailPage({
 
   const revenueByTrip = await getRevenueByTripIds(supabase, trips.map((t) => t.id));
   const odometerProvenance = await getVehicleOdometerProvenance(supabase, id);
+  const deliveryOutcomes = await getDeliveryOutcomeBreakdown(supabase, { tripIds: trips.map((t) => t.id) });
   const vehicleInspections = await getInspectionsList(supabase, { vehicleId: id });
   const issuesCreatedByInspection = await getIssuesCreatedCountByInspection(
     supabase,
@@ -203,7 +205,12 @@ export default async function VehicleDetailPage({
           <IncidentsTab incidents={incidents} />
         </TabsContent>
         <TabsContent value="history" className="mt-4">
-          <HistoryTab events={history} />
+          <HistoryTab
+            events={history}
+            financials={financials}
+            fuelConsumption={fuelConsumption}
+            deliveryOutcomes={deliveryOutcomes}
+          />
         </TabsContent>
       </Tabs>
     </div>

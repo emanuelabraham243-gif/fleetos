@@ -8,6 +8,7 @@ import { getVehicles } from "@/lib/data/vehicles";
 import { getVendors } from "@/lib/data/vendors";
 import { isOpenIssueStatus } from "@/lib/domain/maintenance-issue";
 import { canManageFleet } from "@/lib/domain/permissions";
+import { getLocale } from "@/lib/i18n/locale";
 import { createClient } from "@/lib/supabase/server";
 
 import { createWorkOrder } from "../actions";
@@ -30,11 +31,12 @@ export default async function CreateWorkOrderPage({
 
   const params = await searchParams;
   const supabase = await createClient();
-  const [vehicles, issues, vendors, members] = await Promise.all([
+  const [vehicles, issues, vendors, members, locale] = await Promise.all([
     getVehicles(supabase),
     getMaintenanceIssuesList(supabase),
     getVendors(supabase),
     getOrgMembers(supabase),
+    getLocale(),
   ]);
 
   const openIssues = issues.filter((i) => isOpenIssueStatus(i.status));
@@ -53,6 +55,7 @@ export default async function CreateWorkOrderPage({
         members={members.map((m) => ({ id: m.id, fullName: m.full_name }))}
         defaultVehicleId={params.vehicle_id}
         defaultIssueId={params.issue_id}
+        locale={locale}
       />
     </div>
   );

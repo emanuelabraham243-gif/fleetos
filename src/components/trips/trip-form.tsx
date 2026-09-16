@@ -86,19 +86,19 @@ export function TripForm({
           <Input id="reference_number" name="reference_number" />
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="origin">Origin</Label>
+          <Label htmlFor="origin">Loading place</Label>
           <Input id="origin" name="origin" placeholder="e.g. Addis Ababa" />
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="destination">Destination</Label>
+          <Label htmlFor="destination">Unloading place</Label>
           <Input id="destination" name="destination" placeholder="e.g. Dire Dawa" />
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="scheduled_start">Scheduled start *</Label>
+          <Label htmlFor="scheduled_start">Loading date *</Label>
           <Input id="scheduled_start" name="scheduled_start" type="datetime-local" required />
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="scheduled_end">Scheduled end</Label>
+          <Label htmlFor="scheduled_end">Unloading date (planned)</Label>
           <Input id="scheduled_end" name="scheduled_end" type="datetime-local" />
         </div>
       </div>

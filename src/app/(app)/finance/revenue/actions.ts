@@ -37,6 +37,7 @@ export async function createRevenue(
   const contractId = String(formData.get("contract_id") ?? "").trim() || null;
   const tripId = String(formData.get("trip_id") ?? "").trim() || null;
   const currency = String(formData.get("currency") ?? "ETB").trim() || "ETB";
+  const returnTo = String(formData.get("return_to") ?? "").trim();
 
   const supabase = await createClient();
 
@@ -57,7 +58,7 @@ export async function createRevenue(
 
   revalidatePath("/finance/revenue");
   if (tripId) revalidatePath(`/trips/${tripId}`);
-  redirect("/finance/revenue");
+  redirect(returnTo.startsWith("/") ? returnTo : "/finance/revenue");
 }
 
 export type VoidRevenueState = { error: string } | { success: true } | null;

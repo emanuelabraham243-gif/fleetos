@@ -18,7 +18,8 @@ const WORK_ORDER_DETAIL_SELECT = `*,
   assigned_to_profile:profiles!work_orders_assigned_to_fkey(id, full_name),
   maintenance_issue:maintenance_issues(id, title, issue_type, severity, status),
   parts:maintenance_parts(*, vendor:vendors(id, name)),
-  labor:maintenance_labor(*, vendor:vendors(id, name))`;
+  labor:maintenance_labor(*, vendor:vendors(id, name)),
+  service_details:work_order_service_details(*)`;
 
 export type WorkOrderDetail = Database["public"]["Tables"]["work_orders"]["Row"] & {
   vehicle: Pick<
@@ -33,6 +34,7 @@ export type WorkOrderDetail = Database["public"]["Tables"]["work_orders"]["Row"]
   > | null;
   parts: MaintenancePart[];
   labor: MaintenanceLabor[];
+  service_details: Database["public"]["Tables"]["work_order_service_details"]["Row"] | null;
 };
 
 export interface WorkOrderFilters {

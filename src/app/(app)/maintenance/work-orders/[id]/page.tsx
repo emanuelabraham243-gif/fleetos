@@ -24,12 +24,18 @@ import { canManageFleet } from "@/lib/domain/permissions";
 import { computeDowntime, computeWorkOrderCostBreakdown, formatDowntime, nextWorkOrderStatuses } from "@/lib/domain/work-order";
 import { formatCurrency } from "@/lib/format-currency";
 import { formatFullDateTime } from "@/lib/format-time";
+import { am } from "@/lib/i18n/am";
 import {
+  DIFFERENTIAL_SIDE_LABEL,
+  FILTER_TYPE_LABEL,
   MAINTENANCE_ISSUE_STATUS_LABEL,
   MAINTENANCE_TYPE_LABEL,
   WORK_ORDER_PRIORITY_LABEL,
+  WORK_ORDER_SERVICE_CATEGORY_LABEL,
   WORK_ORDER_STATUS_LABEL,
 } from "@/lib/i18n/labels";
+import { getLocale } from "@/lib/i18n/locale";
+import { getLabel } from "@/lib/i18n/resolve";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function WorkOrderDetailPage({
@@ -45,13 +51,14 @@ export default async function WorkOrderDetailPage({
     notFound();
   }
 
-  const [profile, expenses, attachments, auditHistory, vendors, vehicleMaintenance] = await Promise.all([
+  const [profile, expenses, attachments, auditHistory, vendors, vehicleMaintenance, locale] = await Promise.all([
     getCurrentProfile(),
     getWorkOrderExpenses(supabase, id),
     getAttachmentsWithUrls(supabase, "work_order", id),
     getWorkOrderAuditHistory(supabase, id),
     getVendors(supabase),
     getVehicleMaintenance(supabase, workOrder.vehicle_id),
+    getLocale(),
   ]);
 
   const canManage = profile ? canManageFleet(profile.role) : false;
@@ -76,6 +83,11 @@ export default async function WorkOrderDetailPage({
             <Badge variant={workOrder.priority === "CRITICAL" ? "destructive" : "outline"}>
               {WORK_ORDER_PRIORITY_LABEL[workOrder.priority]}
             </Badge>
+            {workOrder.service_category ? (
+              <Badge variant="outline">
+                {getLabel(WORK_ORDER_SERVICE_CATEGORY_LABEL, am.WORK_ORDER_SERVICE_CATEGORY_LABEL, workOrder.service_category, locale)}
+              </Badge>
+            ) : null}
           </div>
           <p className="text-muted-foreground mt-1 text-sm">
             {workOrder.vehicle ? (
@@ -125,6 +137,78 @@ export default async function WorkOrderDetailPage({
                   <span>{workOrder.maintenance_issue.title}</span>
                   <Badge variant="outline">{MAINTENANCE_ISSUE_STATUS_LABEL[workOrder.maintenance_issue.status]}</Badge>
                 </Link>
+              </div>
+            ) : null}
+
+            {workOrder.service_category && workOrder.service_details ? (
+              <div>
+                <h3 className="text-muted-foreground mb-1 text-xs font-semibold tracking-wide uppercase">
+                  Service Details
+                </h3>
+                <dl className="grid grid-cols-1 gap-x-4 gap-y-1 rounded-md border p-3 text-sm sm:grid-cols-2">
+                  {workOrder.service_details.filter_type ? (
+                    <>
+                      <dt className="text-muted-foreground">Filter type</dt>
+                      <dd>{FILTER_TYPE_LABEL[workOrder.service_details.filter_type as "full" | "half"]}</dd>
+                    </>
+                  ) : null}
+                  {workOrder.service_details.place_serviced ? (
+                    <>
+                      <dt className="text-muted-foreground">Place serviced</dt>
+                      <dd>{workOrder.service_details.place_serviced}</dd>
+                    </>
+                  ) : null}
+                  {workOrder.service_details.differential_side ? (
+                    <>
+                      <dt className="text-muted-foreground">Differential</dt>
+                      <dd>
+                        {DIFFERENTIAL_SIDE_LABEL[workOrder.service_details.differential_side as "front" | "rear" | "both"]}
+                      </dd>
+                    </>
+                  ) : null}
+                  {workOrder.service_details.differential_oil_notes ? (
+                    <>
+                      <dt className="text-muted-foreground">Differential oil</dt>
+                      <dd>{workOrder.service_details.differential_oil_notes}</dd>
+                    </>
+                  ) : null}
+                  {workOrder.service_details.gearbox_cab_oil_notes ? (
+                    <>
+                      <dt className="text-muted-foreground">Gearbox/cab oil</dt>
+                      <dd>{workOrder.service_details.gearbox_cab_oil_notes}</dd>
+                    </>
+                  ) : null}
+                  {workOrder.service_details.trailer_tire !== null ? (
+                    <>
+                      <dt className="text-muted-foreground">Trailer tire serviced</dt>
+                      <dd>{workOrder.service_details.trailer_tire ? "Yes" : "No"}</dd>
+                    </>
+                  ) : null}
+                  {workOrder.service_details.tire_type ? (
+                    <>
+                      <dt className="text-muted-foreground">Tire type</dt>
+                      <dd>{workOrder.service_details.tire_type}</dd>
+                    </>
+                  ) : null}
+                  {workOrder.service_details.tire_serial_number ? (
+                    <>
+                      <dt className="text-muted-foreground">Tire serial number</dt>
+                      <dd>{workOrder.service_details.tire_serial_number}</dd>
+                    </>
+                  ) : null}
+                  {workOrder.service_details.front_tire_count !== null ? (
+                    <>
+                      <dt className="text-muted-foreground">Front tires installed</dt>
+                      <dd>{workOrder.service_details.front_tire_count}</dd>
+                    </>
+                  ) : null}
+                  {workOrder.service_details.rear_tire_count !== null ? (
+                    <>
+                      <dt className="text-muted-foreground">Rear tires installed</dt>
+                      <dd>{workOrder.service_details.rear_tire_count}</dd>
+                    </>
+                  ) : null}
+                </dl>
               </div>
             ) : null}
 

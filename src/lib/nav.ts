@@ -2,8 +2,6 @@ import type { LucideIcon } from "lucide-react";
 import {
   Activity,
   AlertTriangle,
-  BarChart3,
-  Bell,
   Boxes,
   Cable,
   ClipboardCheck,
@@ -16,7 +14,6 @@ import {
   Radio,
   Receipt,
   Route,
-  ScrollText,
   Settings,
   ShieldAlert,
   Truck,
@@ -71,29 +68,17 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: "Compliance",
-    items: [
-      { label: "Documents", href: "/compliance/documents", icon: FileText },
-      { label: "Contracts", href: "/compliance/contracts", icon: FileStack },
-    ],
-  },
-  {
-    label: "Intelligence",
-    items: [
-      { label: "Reports", href: "/intelligence/reports", icon: ScrollText },
-      { label: "Analytics", href: "/intelligence/analytics", icon: BarChart3 },
-      { label: "Alerts", href: "/intelligence/alerts", icon: Bell },
-    ],
+    items: [{ label: "Documents", href: "/compliance/documents", icon: FileText }],
   },
   {
     label: "Issues",
-    items: [
-      { label: "Incidents", href: "/issues/incidents", icon: ShieldAlert },
-      { label: "Disputes", href: "/issues/disputes", icon: AlertTriangle },
-    ],
+    items: [{ label: "Incidents", href: "/issues/incidents", icon: ShieldAlert }],
   },
   {
-    label: "System",
+    label: "Admin",
     items: [
+      { label: "Contracts", href: "/compliance/contracts", icon: FileStack },
+      { label: "Disputes", href: "/issues/disputes", icon: AlertTriangle },
       { label: "Integrations", href: "/system/integrations", icon: Cable },
       { label: "Users", href: "/system/users", icon: Users },
       { label: "Audit Log", href: "/system/audit-log", icon: ListChecks },

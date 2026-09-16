@@ -1,6 +1,8 @@
 import { Card, CardContent } from "@/components/ui/card";
+import { RecordRevenueDialog } from "@/components/trips/detail/record-revenue-dialog";
 import { formatCurrency } from "@/lib/format-currency";
-import type { TripFinancialSummary } from "@/lib/data/trip-finance";
+import { formatDate } from "@/lib/format-time";
+import type { TripFinancialLineItem, TripFinancialSummary } from "@/lib/data/trip-finance";
 
 function MetricCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -12,13 +14,53 @@ function MetricCard({ label, value, hint }: { label: string; value: string; hint
   );
 }
 
-export function FinancialSection({ summary }: { summary: TripFinancialSummary }) {
+function LineItemList({ title, items }: { title: string; items: TripFinancialLineItem[] }) {
+  return (
+    <div>
+      <h3 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase">{title}</h3>
+      {items.length === 0 ? (
+        <p className="text-muted-foreground text-sm">No itemized records yet.</p>
+      ) : (
+        <div className="flex flex-col gap-1">
+          {items.map((item) => (
+            <div key={item.id} className="flex items-center justify-between rounded-md border p-2 text-sm">
+              <div>
+                <p>{item.description}</p>
+                <p className="text-muted-foreground text-xs">{formatDate(item.occurredAt)}</p>
+              </div>
+              <span className="font-medium">{formatCurrency(item.amount, item.currency)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function FinancialSection({
+  summary,
+  tripId,
+  clientId,
+  canManage,
+}: {
+  summary: TripFinancialSummary;
+  tripId: string;
+  clientId: string | null;
+  canManage: boolean;
+}) {
   const format = (value: number | null) =>
     value === null ? "No data yet" : formatCurrency(value, summary.currency);
 
   return (
     <Card>
       <CardContent className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium">Trip Expense / Income / Profit Summary</p>
+          {canManage ? (
+            <RecordRevenueDialog tripId={tripId} clientId={clientId} currency={summary.currency} />
+          ) : null}
+        </div>
+
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <MetricCard label="Revenue" value={format(summary.revenue)} hint="Recorded against this trip" />
           <MetricCard label="Fuel cost" value={format(summary.fuelCost)} hint="Fuel linked to this trip" />
@@ -37,9 +79,15 @@ export function FinancialSection({ summary }: { summary: TripFinancialSummary })
           </p>
         ) : (
           <div className="border-t pt-3">
-            <MetricCard label="Current margin" value={format(summary.margin)} />
+            <MetricCard label="Net profit" value={format(summary.margin)} />
           </div>
         )}
+
+        <div className="flex flex-col gap-4 border-t pt-3">
+          <LineItemList title="Revenue" items={summary.revenueItems} />
+          <LineItemList title="Fuel" items={summary.fuelItems} />
+          <LineItemList title="Other Expenses" items={summary.expenseItems} />
+        </div>
       </CardContent>
     </Card>
   );

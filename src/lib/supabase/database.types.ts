@@ -2669,6 +2669,78 @@ export type Database = {
           },
         ]
       }
+      work_order_service_details: {
+        Row: {
+          created_at: string
+          differential_oil_notes: string | null
+          differential_side: string | null
+          filter_type: string | null
+          front_tire_count: number | null
+          gearbox_cab_oil_notes: string | null
+          id: string
+          notes: string | null
+          organization_id: string
+          place_serviced: string | null
+          rear_tire_count: number | null
+          tire_serial_number: string | null
+          tire_type: string | null
+          trailer_tire: boolean | null
+          updated_at: string
+          work_order_id: string
+        }
+        Insert: {
+          created_at?: string
+          differential_oil_notes?: string | null
+          differential_side?: string | null
+          filter_type?: string | null
+          front_tire_count?: number | null
+          gearbox_cab_oil_notes?: string | null
+          id?: string
+          notes?: string | null
+          organization_id: string
+          place_serviced?: string | null
+          rear_tire_count?: number | null
+          tire_serial_number?: string | null
+          tire_type?: string | null
+          trailer_tire?: boolean | null
+          updated_at?: string
+          work_order_id: string
+        }
+        Update: {
+          created_at?: string
+          differential_oil_notes?: string | null
+          differential_side?: string | null
+          filter_type?: string | null
+          front_tire_count?: number | null
+          gearbox_cab_oil_notes?: string | null
+          id?: string
+          notes?: string | null
+          organization_id?: string
+          place_serviced?: string | null
+          rear_tire_count?: number | null
+          tire_serial_number?: string | null
+          tire_type?: string | null
+          trailer_tire?: boolean | null
+          updated_at?: string
+          work_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_order_service_details_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_order_service_details_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: true
+            referencedRelation: "work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       work_orders: {
         Row: {
           assigned_to: string | null
@@ -2690,6 +2762,9 @@ export type Database = {
           opened_at: string
           organization_id: string
           priority: Database["public"]["Enums"]["work_order_priority"]
+          service_category:
+            | Database["public"]["Enums"]["work_order_service_category"]
+            | null
           started_at: string | null
           status: Database["public"]["Enums"]["work_order_status"]
           title: string
@@ -2718,6 +2793,9 @@ export type Database = {
           opened_at?: string
           organization_id: string
           priority?: Database["public"]["Enums"]["work_order_priority"]
+          service_category?:
+            | Database["public"]["Enums"]["work_order_service_category"]
+            | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["work_order_status"]
           title: string
@@ -2746,6 +2824,9 @@ export type Database = {
           opened_at?: string
           organization_id?: string
           priority?: Database["public"]["Enums"]["work_order_priority"]
+          service_category?:
+            | Database["public"]["Enums"]["work_order_service_category"]
+            | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["work_order_status"]
           title?: string
@@ -3023,6 +3104,11 @@ export type Database = {
         | "other"
         | "tire_supplier"
       work_order_priority: "LOW" | "NORMAL" | "HIGH" | "CRITICAL"
+      work_order_service_category:
+        | "ENGINE_OIL_SERVICE"
+        | "DIFFERENTIAL_GEARBOX_SERVICE"
+        | "GARAGE_TIRE_AXLE_SERVICE"
+        | "TIRE_PURCHASE_INSTALLATION"
       work_order_status:
         | "DRAFT"
         | "APPROVED"
@@ -3371,6 +3457,12 @@ export const Constants = {
         "tire_supplier",
       ],
       work_order_priority: ["LOW", "NORMAL", "HIGH", "CRITICAL"],
+      work_order_service_category: [
+        "ENGINE_OIL_SERVICE",
+        "DIFFERENTIAL_GEARBOX_SERVICE",
+        "GARAGE_TIRE_AXLE_SERVICE",
+        "TIRE_PURCHASE_INSTALLATION",
+      ],
       work_order_status: [
         "DRAFT",
         "APPROVED",
@@ -3385,3 +3477,4 @@ export const Constants = {
     },
   },
 } as const
+
